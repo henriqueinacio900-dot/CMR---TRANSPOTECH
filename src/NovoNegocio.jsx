@@ -7,7 +7,6 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [telefone, setTelefone] = useState('')
   const [cidade, setCidade] = useState('')
   const [departamentoId, setDepartamentoId] = useState(departamentos[0]?.id || '')
-  const [valor, setValor] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -25,7 +24,6 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
       await criarNegocio({
         cliente_id: cliente.id,
         departamento_id: departamentoId,
-        valor_cotacao: valor ? Number(valor) : null,
       })
       onCriado()
     } catch (err) {
@@ -45,7 +43,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
         background: '#fff', borderRadius: 12, padding: 24, width: 360,
         boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
       }}>
-        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>Novo negócio</h2>
+        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>Novo cliente / prospecção</h2>
 
         <Campo label="Razão social / Nome do cliente">
           <input required value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} style={inputStyle} />
@@ -63,10 +61,6 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
           <select required value={departamentoId} onChange={e => setDepartamentoId(e.target.value)} style={inputStyle}>
             {departamentos.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
           </select>
-        </Campo>
-
-        <Campo label="Valor da cotação (R$)">
-          <input type="number" value={valor} onChange={e => setValor(e.target.value)} style={inputStyle} />
         </Campo>
 
         {erro && <p style={{ color: '#a32d2d', fontSize: 13, margin: '0 0 12px' }}>{erro}</p>}

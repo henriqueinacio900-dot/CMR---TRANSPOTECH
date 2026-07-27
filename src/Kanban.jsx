@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listarDepartamentos, listarNegocios } from './api'
+import { listarDepartamentos, listarNegocios, voltarParaProspeccao } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
+import ProspeccaoCard from './ProspeccaoCard.jsx'
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
@@ -91,6 +92,9 @@ export default function Kanban() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {itens.map(n => {
+                    if (col.key === 'prospeccao') {
+                      return <ProspeccaoCard key={n.id} negocio={n} onAtualizado={carregar} />
+                    }
                     const temp = CORES_TEMPERATURA[n.temperatura]
                     return (
                       <div key={n.id} style={{
@@ -116,6 +120,8 @@ export default function Kanban() {
             )
           })}
         </div>
+
+        <ListaRetorno negocios={filtrados} onAtualizado={carregar} />
       </div>
 
       {modalAberto && (
@@ -128,6 +134,44 @@ export default function Kanban() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function ListaRetorno({ negocios, onAtualizado }) {
+  const itens = negocios
+    .filter(n => n.etapa === 'retorno_futuro')
+    .sort((a, b) => (a.data_retorno || '').localeCompare(b.data_retorno || ''))
+
+  if (itens.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Lista de retorno ({itens.length})</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {itens.map(n => (
+          <div key={n.id} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: '8px 12px',
+          }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{n.cliente?.razao_social}</p>
+              <p style={{ fontSize: 11, color: '#777', margin: '2px 0 0' }}>
+                Voltar em {n.data_retorno ? new Date(n.data_retorno + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} · {n.consultor?.nome}
+              </p>
+            </div>
+            <button
+              onClick={async () => { await voltarParaProspeccao(n.id); onAtualizado() }}
+              style={{
+                background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6,
+                padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600,
+              }}
+            >
+              Voltar pra prospecção
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

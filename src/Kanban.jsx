@@ -66,7 +66,14 @@ export default function Kanban() {
     <div style={{ display: 'flex' }}>
       <Sidebar visao={visao} onMudarVisao={setVisao} />
 
-      <div style={{ flex: 1, minWidth: 0, background: '#f6f5f2', minHeight: '100vh' }}>
+      <div style={{
+        flex: 1, minWidth: 0, minHeight: '100vh',
+        background: `linear-gradient(rgba(246,245,242,0.93), rgba(246,245,242,0.96)), url('/banner-transpotech.png')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}>
         <div style={{
           background: '#fff', padding: '14px 24px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 16, borderBottom: '1px solid #eee', flexWrap: 'wrap',
@@ -278,7 +285,52 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis }) {
         })}
       </div>
       <ListaRetorno negocios={filtrados} onAtualizado={onAtualizado} />
+      <ConversaoEtapas filtrados={filtrados} />
     </>
+  )
+}
+
+const ETAPAS_FUNIL_CONVERSAO = [
+  { key: 'prospeccao', label: 'Prospecção' },
+  { key: 'contato_realizado', label: 'Contato realizado' },
+  { key: 'oportunidade_identificada', label: 'Oportunidade identificada' },
+  { key: 'orcamento_enviado', label: 'Orçamento enviado' },
+  { key: 'negociacao_decisao', label: 'Negociação/decisão' },
+  { key: 'ganha', label: 'Ganha' },
+]
+
+function ConversaoEtapas({ filtrados }) {
+  const contagens = ETAPAS_FUNIL_CONVERSAO.map(e => ({
+    ...e,
+    total: filtrados.filter(n => n.etapa === e.key).length,
+  }))
+
+  return (
+    <div style={{ marginTop: 24, background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 12px', color: '#333' }}>Conversão entre etapas</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+        {contagens.map((c, i) => {
+          const anterior = contagens[i - 1]
+          const conversao = anterior && anterior.total > 0 ? (c.total / anterior.total * 100) : null
+          return (
+            <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              {i > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 6px' }}>
+                  <span style={{ fontSize: 11, color: '#3b6d11', fontWeight: 700 }}>
+                    {conversao !== null ? `${conversao.toFixed(1)}%` : '-'}
+                  </span>
+                  <span style={{ fontSize: 14, color: '#bbb' }}>→</span>
+                </div>
+              )}
+              <div style={{ border: '1px solid #eee', borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110 }}>
+                <p style={{ fontSize: 11, color: '#777', margin: '0 0 4px', whiteSpace: 'nowrap' }}>{c.label}</p>
+                <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{c.total}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

@@ -10,3 +10,4 @@
 
 Conecte este repositório na Vercel — o build é automático (`npm run build`), sem configuração extra.
 Nas variáveis de ambiente da Vercel, adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+ 

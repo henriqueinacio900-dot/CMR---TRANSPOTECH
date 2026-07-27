@@ -6,6 +6,8 @@ import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
 import FilaLigar from './FilaLigar.jsx'
 import AlertasCentral from './AlertasCentral.jsx'
+import Dashboard from './Dashboard.jsx'
+import Reativacao from './Reativacao.jsx'
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
@@ -14,6 +16,7 @@ export default function Kanban() {
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [negocioSelecionado, setNegocioSelecionado] = useState(null)
+  const [visao, setVisao] = useState('kanban') // kanban | reativacao | indicadores
 
   async function carregar() {
     setCarregando(true)
@@ -59,6 +62,19 @@ export default function Kanban() {
           >
             + Novo negócio
           </button>
+          {['kanban', 'reativacao', 'indicadores'].map(v => (
+            <button
+              key={v}
+              onClick={() => setVisao(v)}
+              style={{
+                background: visao === v ? '#D85A30' : '#ffffffcc',
+                color: visao === v ? '#fff' : '#555',
+                border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              {v === 'kanban' ? 'Kanban' : v === 'reativacao' ? 'Reativação' : 'Indicadores'}
+            </button>
+          ))}
           {['todos', 'Pós-vendas', 'Varejo', 'Pneus'].map(d => (
             <button
               key={d}
@@ -80,6 +96,10 @@ export default function Kanban() {
         </div>
       </div>
 
+      {visao === 'indicadores' && <Dashboard />}
+      {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
+
+      {visao === 'kanban' && (
       <div style={{ padding: 24 }}>
         <FilaLigar negocios={filtrados} onAbrir={id => setNegocioSelecionado(id)} onAtualizado={carregar} />
 
@@ -128,6 +148,7 @@ export default function Kanban() {
 
         <ListaRetorno negocios={filtrados} onAtualizado={carregar} />
       </div>
+      )}
 
       {modalAberto && (
         <NovoNegocio

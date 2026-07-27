@@ -216,7 +216,106 @@ export async function marcarGanha(negocioId, { valor_final }) {
   return moverEtapa(negocioId, 'ganha', { valor_final })
 }
 
+export async function criarPassagemBastao(dados) {
+  const consultor = await getMeuConsultor()
+  const { data, error } = await supabase
+    .from('passagens_bastao')
+    .insert({ ...dados, responsavel_operacional_id: dados.responsavel_operacional_id || null })
+    .select()
+    .single()
+  if (error) throw error
+  await registrarHistorico({
+    negocio_id: dados.negocio_id,
+    tipo_evento: 'passagem_bastao',
+    descricao: `Passagem de bastão criada — pedido ${dados.numero_pedido || 's/n'}`,
+  })
+  return data
+}
+
+export async function buscarPassagemBastao(negocioId) {
+  const { data, error } = await supabase.from('passagens_bastao').select('*').eq('negocio_id', negocioId).maybeSingle()
+  if (error) { console.error(error); return null }
+  return data
+}
+
+export async function atualizarPassagemBastao(id, dados) {
+  const { data, error } = await supabase.from('passagens_bastao').update(dados).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function listarPassagensBastao() {
+  const { data, error } = await supabase
+    .from('passagens_bastao')
+    .select(`
+      id, status, produto_servico, valor_final, numero_pedido, prazo_prometido, criado_em,
+      negocio:negocios ( id, cliente:clientes ( razao_social ) ),
+      departamento_destino:departamentos ( nome ),
+      responsavel_operacional:consultores ( nome )
+    `)
+    .order('criado_em', { ascending: false })
+  if (error) { console.error(error); return [] }
+  return data
+}
+
 // ---------- Contatos ----------
+export async function listarCandidatosReativacao() {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const seissentaDiasAtras = new Date()
+  seissentaDiasAtras.setDate(seissentaDiasAtras.getDate() - 60)
+
+  const { data: perdidos, error: erroPerdidos } = await supabase
+    .from('negocios')
+    .select(`
+      id, produto_servico, valor_cotacao, data_perda, motivo_perda_id,
+      cliente:clientes ( id, razao_social, telefone_whats ),
+      departamento:departamentos ( id, nome ),
+      motivo_perda:motivos_perda ( descricao )
+    `)
+    .eq('etapa', 'perdida')
+    .eq('pode_reativar', true)
+    .or(`data_sugerida_reativacao.is.null,data_sugerida_reativacao.lte.${hoje}`)
+
+  const { data: ganhos, error: erroGanhos } = await supabase
+    .from('negocios')
+    .select(`
+      id, produto_servico, valor_final, atualizado_em,
+      cliente:clientes ( id, razao_social, telefone_whats ),
+      departamento:departamentos ( id, nome )
+    `)
+    .eq('etapa', 'ganha')
+    .lt('atualizado_em', seissentaDiasAtras.toISOString())
+
+  if (erroPerdidos) console.error(erroPerdidos)
+  if (erroGanhos) console.error(erroGanhos)
+
+  const listaPerdidos = (perdidos || []).map(n => ({
+    ...n,
+    motivo: `Perdido${n.motivo_perda?.descricao ? ' (' + n.motivo_perda.descricao + ')' : ''} — reativação sugerida`,
+  }))
+  const listaGanhos = (ganhos || []).map(n => ({
+    ...n,
+    motivo: `${Math.floor((Date.now() - new Date(n.atualizado_em)) / 86400000)} dias sem compra`,
+  }))
+
+  return [...listaPerdidos, ...listaGanhos]
+}
+
+export async function criarNegocioReativacao({ cliente_id, departamento_id, produto_servico }) {
+  return criarNegocio({
+    cliente_id,
+    departamento_id,
+    titulo: produto_servico ? `Reativação - ${produto_servico}` : 'Reativação',
+    produto_servico: produto_servico || null,
+    origem: 'recompra',
+  })
+}
+export async function listarConsultores() {
+  const { data, error } = await supabase.from('consultores').select('id, nome, perfil').order('nome')
+  if (error) { console.error(error); return [] }
+  return data
+}
+
 export async function listarContatos(clienteId) {
   const { data, error } = await supabase.from('contatos').select('*').eq('cliente_id', clienteId).order('principal', { ascending: false })
   if (error) { console.error(error); return [] }
@@ -280,6 +379,18 @@ export async function listarHistorico(negocioId) {
   const { data, error } = await supabase.from('historico').select('*, usuario:consultores(nome)').eq('negocio_id', negocioId).order('criado_em', { ascending: false })
   if (error) { console.error(error); return [] }
   return data
+}
+
+export async function contarInteracoesMes() {
+  const inicioMes = new Date()
+  inicioMes.setDate(1)
+  inicioMes.setHours(0, 0, 0, 0)
+  const { count, error } = await supabase
+    .from('interacoes')
+    .select('*', { count: 'exact', head: true })
+    .gte('criado_em', inicioMes.toISOString())
+  if (error) { console.error(error); return 0 }
+  return count || 0
 }
 
 function daquiADias(dias) {

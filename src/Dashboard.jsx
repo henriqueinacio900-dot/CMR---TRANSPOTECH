@@ -1,0 +1,179 @@
+import { useEffect, useState } from 'react'
+import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao } from './api'
+import { classificarPci, formatarMoeda } from './constants'
+
+const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
+const ETAPA_PARA_CONFIG = {
+  prospeccao: 'dias_prospeccao_sem_contato',
+  contato_realizado: 'dias_contato_sem_atualizacao',
+  oportunidade_identificada: 'dias_oportunidade_sem_orcamento',
+  orcamento_enviado: 'dias_orcamento_sem_followup',
+  negociacao_decisao: 'dias_negociacao_sem_atualizacao',
+}
+
+export default function Dashboard() {
+  const [negocios, setNegocios] = useState([])
+  const [contatosMes, setContatosMes] = useState(0)
+  const [config, setConfig] = useState({})
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    Promise.all([listarNegocios(), contarInteracoesMes(), listarConfiguracoesAutomacao()]).then(([n, c, cfg]) => {
+      setNegocios(n)
+      setContatosMes(c)
+      setConfig(cfg)
+      setCarregando(false)
+    })
+  }, [])
+
+  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+
+  const abertos = negocios.filter(n => ETAPAS_ABERTAS.includes(n.etapa))
+  const ganhos = negocios.filter(n => n.etapa === 'ganha')
+  const perdidos = negocios.filter(n => n.etapa === 'perdida')
+  const ganhosMes = ganhos.filter(n => new Date(n.atualizado_em) >= inicioMes)
+  const perdidosMes = perdidos.filter(n => n.data_perda && new Date(n.data_perda) >= inicioMes)
+
+  const pipelineTotal = abertos.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+  const pipelinePonderado = abertos.reduce((s, n) => {
+    const prob = n.probabilidade_fechamento != null ? n.probabilidade_fechamento / 100 : 0.3
+    return s + (n.valor_cotacao || 0) * prob
+  }, 0)
+  const valorGanhoMes = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+  const valorPerdidoMes = perdidosMes.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+  const taxaConversao = (ganhos.length + perdidos.length) > 0
+    ? (ganhos.length / (ganhos.length + perdidos.length) * 100)
+    : 0
+  const ticketMedio = ganhos.length > 0
+    ? ganhos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / ganhos.length
+    : 0
+
+  const prospeccoesMes = negocios.filter(n => new Date(n.criado_em) >= inicioMes).length
+  const orcamentosMes = negocios.filter(n => n.data_orcamento && new Date(n.data_orcamento) >= inicioMes).length
+  const followupsProgramados = abertos.filter(n => n.proxima_acao_data).length
+  const followupsAtrasados = abertos.filter(n => n.proxima_acao_data && new Date(n.proxima_acao_data) < agora).length
+  const semProximaAcao = abertos.filter(n => !n.proxima_acao).length
+
+  const oportunidadesParadas = abertos.filter(n => {
+    const diasParado = n.atualizado_em ? Math.floor((agora - new Date(n.atualizado_em)) / 86400000) : 0
+    const limite = Number(config[ETAPA_PARA_CONFIG[n.etapa]] || 0)
+    return limite && diasParado > limite
+  }).length
+
+  const pciASemContato = negocios.filter(n => {
+    const nota = n.avaliacoes_pci?.[0]?.nota_total
+    return nota !== undefined && classificarPci(nota).sigla === 'A' && !n.ultima_interacao_em
+  }).length
+
+  const porVendedor = agrupar(negocios, n => n.consultor?.nome || 'Sem consultor')
+  const porDepartamento = agrupar(negocios, n => n.departamento?.nome || 'Sem departamento')
+
+  return (
+    <div style={{ padding: 24 }}>
+      <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>Indicadores</p>
+
+      <Secao titulo="Visão geral">
+        <div style={grid4}>
+          <Card label="Pipeline total" valor={formatarMoeda(pipelineTotal)} />
+          <Card label="Pipeline ponderado" valor={formatarMoeda(pipelinePonderado)} />
+          <Card label="Ganho no mês" valor={formatarMoeda(valorGanhoMes)} cor="#3b6d11" />
+          <Card label="Perdido no mês" valor={formatarMoeda(valorPerdidoMes)} cor="#a32d2d" />
+        </div>
+        <div style={grid4}>
+          <Card label="Taxa de conversão" valor={`${taxaConversao.toFixed(0)}%`} />
+          <Card label="Ticket médio" valor={formatarMoeda(ticketMedio)} />
+          <Card label="Negócios ganhos no mês" valor={ganhosMes.length} />
+          <Card label="Contatos realizados no mês" valor={contatosMes} />
+        </div>
+      </Secao>
+
+      <Secao titulo="Atividade">
+        <div style={grid4}>
+          <Card label="Prospecções no mês" valor={prospeccoesMes} />
+          <Card label="Orçamentos enviados no mês" valor={orcamentosMes} />
+          <Card label="Follow-ups programados" valor={followupsProgramados} />
+          <Card label="Follow-ups atrasados" valor={followupsAtrasados} cor="#a32d2d" />
+        </div>
+        <div style={grid4}>
+          <Card label="Negócios sem próxima ação" valor={semProximaAcao} cor="#8a6d1f" />
+          <Card label="Oportunidades paradas" valor={oportunidadesParadas} cor="#8a6d1f" />
+          <Card label="Clientes PCI A sem contato" valor={pciASemContato} cor="#a32d2d" />
+        </div>
+      </Secao>
+
+      <Secao titulo="Conversão por vendedor">
+        <TabelaConversao dados={porVendedor} />
+      </Secao>
+
+      <Secao titulo="Conversão por departamento">
+        <TabelaConversao dados={porDepartamento} />
+      </Secao>
+    </div>
+  )
+}
+
+function agrupar(negocios, chaveFn) {
+  const mapa = {}
+  negocios.forEach(n => {
+    const chave = chaveFn(n)
+    if (!mapa[chave]) mapa[chave] = { ganhos: 0, perdidos: 0, valorGanho: 0 }
+    if (n.etapa === 'ganha') { mapa[chave].ganhos++; mapa[chave].valorGanho += (n.valor_final || n.valor_cotacao || 0) }
+    if (n.etapa === 'perdida') mapa[chave].perdidos++
+  })
+  return Object.entries(mapa).map(([nome, v]) => ({
+    nome,
+    ...v,
+    conversao: (v.ganhos + v.perdidos) > 0 ? (v.ganhos / (v.ganhos + v.perdidos) * 100) : 0,
+  })).sort((a, b) => b.valorGanho - a.valorGanho)
+}
+
+function TabelaConversao({ dados }) {
+  if (dados.length === 0) return <p style={{ color: '#999', fontSize: 13 }}>Sem dados ainda.</p>
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <thead>
+        <tr style={{ textAlign: 'left', color: '#777', borderBottom: '1px solid #eee' }}>
+          <th style={{ padding: '6px 4px' }}>Nome</th>
+          <th style={{ padding: '6px 4px' }}>Ganhos</th>
+          <th style={{ padding: '6px 4px' }}>Perdidos</th>
+          <th style={{ padding: '6px 4px' }}>Conversão</th>
+          <th style={{ padding: '6px 4px' }}>Valor ganho</th>
+        </tr>
+      </thead>
+      <tbody>
+        {dados.map(d => (
+          <tr key={d.nome} style={{ borderBottom: '1px solid #f2f2f2' }}>
+            <td style={{ padding: '6px 4px', fontWeight: 600 }}>{d.nome}</td>
+            <td style={{ padding: '6px 4px' }}>{d.ganhos}</td>
+            <td style={{ padding: '6px 4px' }}>{d.perdidos}</td>
+            <td style={{ padding: '6px 4px' }}>{d.conversao.toFixed(0)}%</td>
+            <td style={{ padding: '6px 4px' }}>{formatarMoeda(d.valorGanho)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function Secao({ titulo, children }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#F77E01', textTransform: 'uppercase', margin: '0 0 10px' }}>{titulo}</p>
+      {children}
+    </div>
+  )
+}
+
+function Card({ label, valor, cor }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: 14, marginBottom: 10 }}>
+      <p style={{ fontSize: 12, color: '#777', margin: '0 0 4px' }}>{label}</p>
+      <p style={{ fontSize: 20, fontWeight: 700, margin: 0, color: cor || '#222' }}>{valor}</p>
+    </div>
+  )
+}
+
+const grid4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }

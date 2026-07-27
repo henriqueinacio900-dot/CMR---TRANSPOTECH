@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
   listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha,
+  recalcularProximoPassoOrcamento,
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
@@ -54,7 +55,7 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
           {aba === 'Cliente e contatos' && <AbaCliente negocio={negocio} />}
           {aba === 'Oportunidade' && <AbaOportunidade negocio={negocio} onAtualizado={onAtualizado} />}
           {aba === 'PCI' && <PciForm negocioId={negocio.id} />}
-          {aba === 'Atividades' && <AbaAtividades negocio={negocio} />}
+          {aba === 'Atividades' && <AbaAtividades negocio={negocio} onAtualizado={onAtualizado} />}
           {aba === 'Histórico' && <AbaHistorico negocio={negocio} />}
         </div>
 
@@ -81,6 +82,11 @@ function AbaResumo({ negocio }) {
           : 'Nenhuma definida'
       } />
       <Linha label="Dias sem movimentação" valor={diasSemMovimentacao !== null ? `${diasSemMovimentacao} dia(s)` : '-'} />
+      {negocio.etapa === 'orcamento_enviado' && (
+        <p style={{ fontSize: 11, color: '#999', margin: 0 }}>
+          ↑ Agendado automaticamente pela sequência de acompanhamento pós-orçamento
+        </p>
+      )}
       {negocio.etapa === 'perdida' && (
         <>
           <Linha label="Motivo da perda" valor={negocio.motivo_perda?.descricao} />
@@ -216,7 +222,7 @@ function AbaOportunidade({ negocio, onAtualizado }) {
   )
 }
 
-function AbaAtividades({ negocio }) {
+function AbaAtividades({ negocio, onAtualizado }) {
   const [atividades, setAtividades] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [tipo, setTipo] = useState('ligacao')
@@ -231,6 +237,12 @@ function AbaAtividades({ negocio }) {
     const nova = await criarAtividade({ negocio_id: negocio.id, tipo, descricao })
     setAtividades([nova, ...atividades])
     setDescricao('')
+
+    // Se o negócio está em Orçamento enviado, recalcula o próximo passo do acompanhamento
+    if (negocio.etapa === 'orcamento_enviado' && negocio.data_orcamento) {
+      await recalcularProximoPassoOrcamento(negocio.id, negocio.data_orcamento)
+      onAtualizado()
+    }
   }
 
   return (

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { SEQUENCIA_ORCAMENTO } from './constants'
 
 export async function getMeuConsultor() {
   const { data: { user } } = await supabase.auth.getUser()
@@ -132,10 +133,47 @@ export async function registrarInteracao({ negocio_id, tipo, resultado, observac
 }
 
 export async function gerarOrcamento(negocioId, { valor_cotacao, temperatura, numero_orcamento }) {
-  return moverEtapa(negocioId, 'orcamento_enviado', {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const resultado = await moverEtapa(negocioId, 'orcamento_enviado', {
     valor_cotacao, temperatura, numero_orcamento,
-    data_orcamento: new Date().toISOString().slice(0, 10),
+    data_orcamento: hoje,
   })
+  await recalcularProximoPassoOrcamento(negocioId, hoje)
+  return resultado
+}
+
+export async function recalcularProximoPassoOrcamento(negocioId, dataOrcamento) {
+  if (!dataOrcamento) return null
+  const config = await listarConfiguracoesAutomacao()
+  const base = new Date(dataOrcamento + 'T00:00:00')
+  const agora = new Date()
+  let passoEscolhido = null
+  let dataEscolhida = null
+
+  for (const passo of SEQUENCIA_ORCAMENTO) {
+    const dias = Number(config[passo.chave] || 0)
+    const dataPasso = new Date(base)
+    dataPasso.setDate(dataPasso.getDate() + dias)
+    if (dataPasso > agora) {
+      passoEscolhido = passo
+      dataEscolhida = dataPasso
+      break
+    }
+  }
+
+  // Se já passou de todos os passos da sequência, não força mais nada sozinho
+  if (!passoEscolhido) return null
+
+  await atualizarNegocio(negocioId, {
+    proxima_acao: passoEscolhido.proxima_acao,
+    proxima_acao_data: dataEscolhida.toISOString(),
+  })
+  await registrarHistorico({
+    negocio_id: negocioId,
+    tipo_evento: 'sequencia_orcamento',
+    descricao: `Sequência de orçamento: próximo passo agendado — ${passoEscolhido.label}`,
+  })
+  return { ...passoEscolhido, data: dataEscolhida.toISOString() }
 }
 
 export async function moverParaRetornoFuturo(negocioId, dataRetorno) {

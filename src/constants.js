@@ -153,7 +153,13 @@ export const PERGUNTAS_PCI = [
     ],
   },
 ]
-
+export const SEQUENCIA_ORCAMENTO = [
+  { chave: 'dias_orcamento_confirmar', label: 'Confirmar recebimento', proxima_acao: 'ligacao' },
+  { chave: 'dias_orcamento_duvidas', label: 'Verificar percepção e dúvidas', proxima_acao: 'ligacao' },
+  { chave: 'dias_orcamento_andamento', label: 'Verificar andamento da decisão', proxima_acao: 'cobrar_decisao' },
+  { chave: 'dias_orcamento_objecoes', label: 'Trabalhar objeções', proxima_acao: 'reuniao' },
+  { chave: 'dias_orcamento_definicao', label: 'Solicitar definição ou reagendar', proxima_acao: 'cobrar_decisao' },
+]
 export function classificarPci(notaTotal) {
   if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
   if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }

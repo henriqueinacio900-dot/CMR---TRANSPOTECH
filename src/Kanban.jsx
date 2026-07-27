@@ -78,7 +78,7 @@ export default function Kanban() {
           background: '#fff', padding: '14px 24px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 16, borderBottom: '1px solid #eee', flexWrap: 'wrap',
         }}>
-          <p style={{ fontWeight: 800, fontSize: 18, margin: 0, color: '#222' }}>CRM Comercial</p>
+          <p style={{ fontWeight: 800, fontSize: 18, margin: 0, color: '#222' }}>CRM - PÓS VENDAS</p>
           <input
             placeholder="Buscar clientes, negócios..."
             value={busca}

@@ -18,7 +18,7 @@ export default function Sidebar({ visao, onMudarVisao }) {
       position: 'sticky', top: 0, alignSelf: 'flex-start',
     }}>
       <div style={{ padding: '0 8px 20px' }}>
-        <p style={{ color: '#F77E01', fontWeight: 800, fontSize: 18, margin: 0, letterSpacing: 0.5 }}>TranspoTech</p>
+        <img src="/logo-transpotech.png" alt="TranspoTech" style={{ width: 120, borderRadius: 6 }} />
       </div>
 
       {ITENS.map(item => {

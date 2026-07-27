@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listarDepartamentos, listarNegocios } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda } from './constants'
+import NovoNegocio from './NovoNegocio.jsx'
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
   const [negocios, setNegocios] = useState([])
   const [deptSelecionado, setDeptSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
+  const [modalAberto, setModalAberto] = useState(false)
+
+  async function carregar() {
+    setCarregando(true)
+    const [deps, negs] = await Promise.all([listarDepartamentos(), listarNegocios()])
+    setDepartamentos(deps)
+    setNegocios(negs)
+    setCarregando(false)
+  }
 
   useEffect(() => {
-    async function carregar() {
-      setCarregando(true)
-      const [deps, negs] = await Promise.all([listarDepartamentos(), listarNegocios()])
-      setDepartamentos(deps)
-      setNegocios(negs)
-      setCarregando(false)
-    }
     carregar()
   }, [])
 
@@ -38,7 +41,16 @@ export default function Kanban() {
     <div>
       <div style={{ background: CORES_MARCA.laranja, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <strong style={{ color: '#fff' }}>CRM Transpotech</strong>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={() => setModalAberto(true)}
+            style={{
+              background: '#fff', color: CORES_MARCA.laranja, border: 'none',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            + Novo negócio
+          </button>
           {['todos', 'Pós-vendas', 'Varejo', 'Pneus'].map(d => (
             <button
               key={d}
@@ -105,6 +117,17 @@ export default function Kanban() {
           })}
         </div>
       </div>
+
+      {modalAberto && (
+        <NovoNegocio
+          departamentos={departamentos}
+          onFechar={() => setModalAberto(false)}
+          onCriado={() => {
+            setModalAberto(false)
+            carregar()
+          }}
+        />
+      )}
     </div>
   )
 }

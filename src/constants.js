@@ -8,16 +8,164 @@ export const CORES_TEMPERATURA = {
   quente: { grad: 'linear-gradient(135deg, #FCEBEB, #F09595)', titulo: '#501313', sub: '#A32D2D' },
 }
 
+// Funil de 7 etapas
 export const ETAPAS = [
   { key: 'prospeccao', label: 'Prospecção' },
-  { key: 'proposta', label: 'Proposta enviada' },
-  { key: 'negociacao', label: 'Negociação' },
+  { key: 'contato_realizado', label: 'Contato realizado' },
+  { key: 'oportunidade_identificada', label: 'Oportunidade identificada' },
+  { key: 'orcamento_enviado', label: 'Orçamento enviado' },
+  { key: 'negociacao_decisao', label: 'Negociação/decisão' },
   { key: 'ganha', label: 'Ganha' },
   { key: 'perdida', label: 'Perdida' },
 ]
 
+export const SUBSTATUS_NEGOCIACAO = [
+  { key: 'em_negociacao', label: 'Em negociação' },
+  { key: 'aguardando_aprovacao', label: 'Aguardando aprovação' },
+  { key: 'aguardando_pedido', label: 'Aguardando pedido' },
+  { key: 'aguardando_retorno', label: 'Aguardando retorno do cliente' },
+]
+
 export const TIPOS_CONTATO = ['ligacao', 'whatsapp', 'presencial', 'email']
+
+export const PAPEIS_CONTATO = [
+  { key: 'decisor', label: 'Decisor' },
+  { key: 'influenciador', label: 'Influenciador' },
+  { key: 'comprador', label: 'Comprador' },
+  { key: 'usuario', label: 'Usuário' },
+  { key: 'contato_operacional', label: 'Contato operacional' },
+]
+
+export const ORIGENS = [
+  { key: 'carteira', label: 'Carteira' },
+  { key: 'recompra', label: 'Recompra' },
+  { key: 'prospeccao_ativa', label: 'Prospecção ativa' },
+  { key: 'indicacao', label: 'Indicação' },
+  { key: 'site', label: 'Site' },
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'campanha', label: 'Campanha' },
+  { key: 'visita', label: 'Visita' },
+  { key: 'evento', label: 'Evento' },
+  { key: 'outro', label: 'Outro' },
+]
+
+export const PROXIMAS_ACOES = [
+  { key: 'ligacao', label: 'Ligação' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'visita', label: 'Visita' },
+  { key: 'reuniao', label: 'Reunião' },
+  { key: 'enviar_orcamento', label: 'Enviar orçamento' },
+  { key: 'revisar_proposta', label: 'Revisar proposta' },
+  { key: 'cobrar_decisao', label: 'Cobrar decisão' },
+  { key: 'pos_venda', label: 'Pós-venda' },
+  { key: 'outro', label: 'Outro' },
+]
+
+export const URGENCIAS = [
+  { key: 'baixa', label: 'Baixa' },
+  { key: 'media', label: 'Média' },
+  { key: 'alta', label: 'Alta' },
+]
+
+// PCI — perguntas e pontuação
+export const PERGUNTAS_PCI = [
+  {
+    campo: 'qtd_maquinas_pontos',
+    pergunta: 'Quantas máquinas o cliente possui?',
+    opcoes: [
+      { label: '1 a 3 máquinas', pontos: 1 },
+      { label: '4 a 10 máquinas', pontos: 2 },
+      { label: '11 a 30 máquinas', pontos: 3 },
+      { label: 'Acima de 30 máquinas', pontos: 4 },
+    ],
+  },
+  {
+    campo: 'potencial_servicos_pontos',
+    pergunta: 'Qual é o potencial de serviços?',
+    opcoes: [
+      { label: 'Compra pontual', pontos: 1 },
+      { label: 'Corretiva frequente', pontos: 2 },
+      { label: 'Preventiva ou rota de inspeção', pontos: 3 },
+      { label: 'Contrato ou solução completa', pontos: 4 },
+    ],
+  },
+  {
+    campo: 'necessidade_pontos',
+    pergunta: 'Existe uma necessidade atual?',
+    opcoes: [
+      { label: 'Nenhuma identificada', pontos: 0 },
+      { label: 'Possível necessidade', pontos: 1 },
+      { label: 'Necessidade confirmada', pontos: 3 },
+      { label: 'Máquina parada ou necessidade urgente', pontos: 4 },
+    ],
+  },
+  {
+    campo: 'decisor_pontos',
+    pergunta: 'O contato participa da decisão?',
+    opcoes: [
+      { label: 'Não sabemos', pontos: 0 },
+      { label: 'Influenciador', pontos: 1 },
+      { label: 'Decisor identificado', pontos: 2 },
+      { label: 'Contato direto com o decisor', pontos: 3 },
+    ],
+  },
+  {
+    campo: 'previsao_compra_pontos',
+    pergunta: 'Existe previsão de compra?',
+    opcoes: [
+      { label: 'Sem previsão', pontos: 0 },
+      { label: 'Mais de 90 dias', pontos: 1 },
+      { label: 'Entre 31 e 90 dias', pontos: 2 },
+      { label: 'Até 30 dias', pontos: 3 },
+      { label: 'Compra imediata', pontos: 4 },
+    ],
+  },
+  {
+    campo: 'relacionamento_pontos',
+    pergunta: 'Como está o relacionamento?',
+    opcoes: [
+      { label: 'Ainda sem contato', pontos: 0 },
+      { label: 'Não respondeu', pontos: 1 },
+      { label: 'Respondeu', pontos: 2 },
+      { label: 'Pediu visita ou orçamento', pontos: 3 },
+    ],
+  },
+  {
+    campo: 'aderencia_pontos',
+    pergunta: 'A Transpotech consegue atender bem?',
+    opcoes: [
+      { label: 'Baixa aderência', pontos: 0 },
+      { label: 'Atendimento possível', pontos: 1 },
+      { label: 'Boa aderência', pontos: 2 },
+      { label: 'Solução estratégica para a Transpotech', pontos: 3 },
+    ],
+  },
+  {
+    campo: 'valor_estimado_pontos',
+    pergunta: 'Qual é o valor estimado?',
+    opcoes: [
+      { label: 'Até R$ 2.000', pontos: 1 },
+      { label: 'De R$ 2.000,01 a R$ 10.000', pontos: 2 },
+      { label: 'De R$ 10.000,01 a R$ 30.000', pontos: 3 },
+      { label: 'Acima de R$ 30.000', pontos: 4 },
+    ],
+  },
+]
+
+export function classificarPci(notaTotal) {
+  if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
+  if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }
+  if (notaTotal >= 10) return { sigla: 'C', label: 'Potencial médio', cor: '#8a6d1f' }
+  return { sigla: 'D', label: 'Baixa prioridade', cor: '#666' }
+}
 
 export function formatarMoeda(valor) {
   return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
+
+export function formatarData(data) {
+  if (!data) return '-'
+  return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
 }

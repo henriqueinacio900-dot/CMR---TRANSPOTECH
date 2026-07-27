@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listarDepartamentos, listarNegocios, voltarParaProspeccao } from './api'
-import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda } from './constants'
+import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
+import CardDetalhado from './CardDetalhado.jsx'
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
@@ -10,6 +11,7 @@ export default function Kanban() {
   const [deptSelecionado, setDeptSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
+  const [negocioSelecionado, setNegocioSelecionado] = useState(null)
 
   async function carregar() {
     setCarregando(true)
@@ -29,8 +31,8 @@ export default function Kanban() {
   }, [negocios, deptSelecionado])
 
   const totais = useMemo(() => {
-    const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao').reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-    const aberto = filtrados.filter(n => ['prospeccao', 'proposta', 'negociacao'].includes(n.etapa)).reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+    const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao_decisao').reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+    const aberto = filtrados.filter(n => !['ganha', 'perdida', 'retorno_futuro', 'descartada'].includes(n.etapa)).reduce((s, n) => s + (n.valor_cotacao || 0), 0)
     const ganho = filtrados.filter(n => n.etapa === 'ganha').reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
     const perdido = filtrados.filter(n => n.etapa === 'perdida').reduce((s, n) => s + (n.valor_cotacao || 0), 0)
     return { emNegociacao, aberto, ganho, perdido }
@@ -38,11 +40,14 @@ export default function Kanban() {
 
   if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
 
+  // busca o negócio selecionado sempre atualizado (após edições)
+  const negocioAtual = negocioSelecionado ? filtrados.find(n => n.id === negocioSelecionado) : null
+
   return (
     <div>
-      <div style={{ background: CORES_MARCA.laranja, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: CORES_MARCA.laranja, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <strong style={{ color: '#fff' }}>CRM Transpotech</strong>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => setModalAberto(true)}
             style={{
@@ -80,12 +85,12 @@ export default function Kanban() {
           <CardValor label="Perdido" valor={totais.perdido} cor="#a32d2d" fundo="#fcebeb" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
           {ETAPAS.map(col => {
             const itens = filtrados.filter(n => n.etapa === col.key)
             const totalCol = itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
             return (
-              <div key={col.key}>
+              <div key={col.key} style={{ minWidth: 200, flex: '1 0 200px' }}>
                 <div style={{ padding: '8px 10px', background: '#f1efe8', borderRadius: 8, marginBottom: 8 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{col.label}</p>
                   <p style={{ fontSize: 12, color: '#666', margin: '2px 0 0' }}>{itens.length} · {formatarMoeda(totalCol)}</p>
@@ -95,24 +100,12 @@ export default function Kanban() {
                     if (col.key === 'prospeccao') {
                       return <ProspeccaoCard key={n.id} negocio={n} onAtualizado={carregar} />
                     }
-                    const temp = CORES_TEMPERATURA[n.temperatura]
                     return (
-                      <div key={n.id} style={{
-                        background: temp ? temp.grad : '#fff',
-                        border: temp ? 'none' : '1px solid #eee',
-                        borderRadius: 12,
-                        padding: '10px 12px',
-                      }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: temp ? temp.titulo : '#222' }}>
-                          {n.cliente?.razao_social}
-                        </p>
-                        <p style={{ fontSize: 13, margin: '4px 0 0', color: temp ? temp.titulo : '#222' }}>
-                          {formatarMoeda(n.valor_cotacao)}
-                        </p>
-                        <p style={{ fontSize: 11, margin: '4px 0 0', color: temp ? temp.sub : '#777' }}>
-                          {n.consultor?.nome}
-                        </p>
-                      </div>
+                      <CardNegocio
+                        key={n.id}
+                        negocio={n}
+                        onClick={() => setNegocioSelecionado(n.id)}
+                      />
                     )
                   })}
                 </div>
@@ -133,6 +126,67 @@ export default function Kanban() {
             carregar()
           }}
         />
+      )}
+
+      {negocioAtual && (
+        <CardDetalhado
+          negocio={negocioAtual}
+          onFechar={() => setNegocioSelecionado(null)}
+          onAtualizado={carregar}
+        />
+      )}
+    </div>
+  )
+}
+
+function CardNegocio({ negocio, onClick }) {
+  const temp = CORES_TEMPERATURA[negocio.temperatura]
+  const notaPci = negocio.avaliacoes_pci?.[0]?.nota_total
+  const pci = notaPci !== undefined ? classificarPci(notaPci) : null
+  const diasParado = negocio.atualizado_em
+    ? Math.floor((Date.now() - new Date(negocio.atualizado_em)) / 86400000)
+    : null
+  const atrasado = negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: temp ? temp.grad : '#fff',
+        border: atrasado ? '2px solid #c0392b' : (temp ? 'none' : '1px solid #eee'),
+        borderRadius: 12,
+        padding: '10px 12px',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: temp ? temp.titulo : '#222' }}>
+          {negocio.cliente?.razao_social}
+        </p>
+        {pci && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor,
+            borderRadius: 4, padding: '1px 5px',
+          }}>
+            {pci.sigla}
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: 13, margin: '4px 0 0', color: temp ? temp.titulo : '#222' }}>
+        {formatarMoeda(negocio.valor_cotacao)}
+      </p>
+      <p style={{ fontSize: 11, margin: '4px 0 0', color: temp ? temp.sub : '#777' }}>
+        {negocio.consultor?.nome}
+      </p>
+      {negocio.proxima_acao_data && (
+        <p style={{ fontSize: 11, margin: '4px 0 0', color: atrasado ? '#c0392b' : (temp ? temp.sub : '#777'), fontWeight: atrasado ? 700 : 400 }}>
+          {atrasado ? '⚠ ' : ''}Próx: {new Date(negocio.proxima_acao_data).toLocaleDateString('pt-BR')}
+        </p>
+      )}
+      {diasParado !== null && diasParado > 0 && (
+        <p style={{ fontSize: 10, margin: '2px 0 0', color: temp ? temp.sub : '#999' }}>
+          {diasParado} dia(s) sem movimentação
+        </p>
       )}
     </div>
   )

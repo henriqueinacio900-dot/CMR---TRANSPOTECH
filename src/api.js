@@ -381,6 +381,31 @@ export async function listarHistorico(negocioId) {
   return data
 }
 
+export async function listarTodosClientes() {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('id, razao_social, nome_fantasia, cnpj, cidade, telefone_whats, status_cliente, departamento:departamentos(nome)')
+    .order('razao_social')
+  if (error) { console.error(error); return [] }
+  return data
+}
+
+export async function listarAtividadesRecentes(limite = 30) {
+  const { data, error } = await supabase
+    .from('atividades')
+    .select('id, tipo, descricao, data_hora, responsavel:consultores(nome), negocio:negocios(id, cliente:clientes(razao_social))')
+    .order('data_hora', { ascending: false })
+    .limit(limite)
+  if (error) { console.error(error); return [] }
+  return data
+}
+
+export async function atualizarStatusPassagem(id, status) {
+  const { data, error } = await supabase.from('passagens_bastao').update({ status }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
 export async function contarInteracoesMes() {
   const inicioMes = new Date()
   inicioMes.setDate(1)

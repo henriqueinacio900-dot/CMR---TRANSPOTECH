@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listarDepartamentos, listarNegocios, voltarParaProspeccao } from './api'
+import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle } from 'lucide-react'
+import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
@@ -8,21 +9,35 @@ import FilaLigar from './FilaLigar.jsx'
 import AlertasCentral from './AlertasCentral.jsx'
 import Dashboard from './Dashboard.jsx'
 import Reativacao from './Reativacao.jsx'
+import Sidebar from './Sidebar.jsx'
+import Clientes from './Clientes.jsx'
+import Atividades from './Atividades.jsx'
+import PassagemBastao from './PassagemBastao.jsx'
+
+const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
+  const [consultores, setConsultores] = useState([])
   const [negocios, setNegocios] = useState([])
+  const [euMesmo, setEuMesmo] = useState(null)
   const [deptSelecionado, setDeptSelecionado] = useState('todos')
+  const [vendedorSelecionado, setVendedorSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [negocioSelecionado, setNegocioSelecionado] = useState(null)
-  const [visao, setVisao] = useState('kanban') // kanban | reativacao | indicadores
+  const [visao, setVisao] = useState('visao_geral')
+  const [busca, setBusca] = useState('')
 
   async function carregar() {
     setCarregando(true)
-    const [deps, negs] = await Promise.all([listarDepartamentos(), listarNegocios()])
+    const [deps, negs, cons, eu] = await Promise.all([
+      listarDepartamentos(), listarNegocios(), listarConsultores(), getMeuConsultor(),
+    ])
     setDepartamentos(deps)
     setNegocios(negs)
+    setConsultores(cons)
+    setEuMesmo(eu)
     setCarregando(false)
   }
 
@@ -31,144 +46,239 @@ export default function Kanban() {
   }, [])
 
   const filtrados = useMemo(() => {
-    if (deptSelecionado === 'todos') return negocios
-    return negocios.filter(n => n.departamento?.nome === deptSelecionado)
-  }, [negocios, deptSelecionado])
+    let lista = negocios
+    if (deptSelecionado !== 'todos') lista = lista.filter(n => n.departamento?.nome === deptSelecionado)
+    if (vendedorSelecionado !== 'todos') lista = lista.filter(n => n.consultor?.id === vendedorSelecionado)
+    if (busca) {
+      const b = busca.toLowerCase()
+      lista = lista.filter(n => n.cliente?.razao_social?.toLowerCase().includes(b) || n.produto_servico?.toLowerCase().includes(b))
+    }
+    return lista
+  }, [negocios, deptSelecionado, vendedorSelecionado, busca])
 
-  const totais = useMemo(() => {
-    const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao_decisao').reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-    const aberto = filtrados.filter(n => !['ganha', 'perdida', 'retorno_futuro', 'descartada'].includes(n.etapa)).reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-    const ganho = filtrados.filter(n => n.etapa === 'ganha').reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
-    const perdido = filtrados.filter(n => n.etapa === 'perdida').reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-    return { emNegociacao, aberto, ganho, perdido }
-  }, [filtrados])
+  const metrics = useMemo(() => calcularMetricas(filtrados), [filtrados])
 
   if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
 
-  // busca o negócio selecionado sempre atualizado (após edições)
-  const negocioAtual = negocioSelecionado ? filtrados.find(n => n.id === negocioSelecionado) : null
+  const negocioAtual = negocioSelecionado ? (filtrados.find(n => n.id === negocioSelecionado) || negocios.find(n => n.id === negocioSelecionado)) : null
 
   return (
-    <div>
-      <div style={{ background: CORES_MARCA.laranja, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <strong style={{ color: '#fff' }}>CRM Transpotech</strong>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setModalAberto(true)}
-            style={{
-              background: '#fff', color: CORES_MARCA.laranja, border: 'none',
-              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            }}
-          >
-            + Novo negócio
-          </button>
-          {['kanban', 'reativacao', 'indicadores'].map(v => (
+    <div style={{ display: 'flex' }}>
+      <Sidebar visao={visao} onMudarVisao={setVisao} />
+
+      <div style={{ flex: 1, minWidth: 0, background: '#f6f5f2', minHeight: '100vh' }}>
+        <div style={{
+          background: '#fff', padding: '14px 24px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 16, borderBottom: '1px solid #eee', flexWrap: 'wrap',
+        }}>
+          <p style={{ fontWeight: 800, fontSize: 18, margin: 0, color: '#222' }}>CRM Comercial</p>
+          <input
+            placeholder="Buscar clientes, negócios..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            style={{ flex: 1, maxWidth: 380, padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13 }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <AlertasCentral negocios={negocios} onAbrir={id => setNegocioSelecionado(id)} />
+            {euMesmo?.nome && (
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{euMesmo.nome}</span>
+            )}
             <button
-              key={v}
-              onClick={() => setVisao(v)}
+              onClick={() => setModalAberto(true)}
               style={{
-                background: visao === v ? '#D85A30' : '#ffffffcc',
-                color: visao === v ? '#fff' : '#555',
-                border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                background: CORES_MARCA.laranja, color: '#fff', border: 'none',
+                borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              {v === 'kanban' ? 'Kanban' : v === 'reativacao' ? 'Reativação' : 'Indicadores'}
+              + Novo negócio
             </button>
-          ))}
-          {['todos', 'Pós-vendas', 'Varejo', 'Pneus'].map(d => (
-            <button
-              key={d}
-              onClick={() => setDeptSelecionado(d)}
-              style={{
-                background: deptSelecionado === d ? '#D85A30' : '#ffffffcc',
-                color: deptSelecionado === d ? '#fff' : '#555',
-                border: 'none',
-                borderRadius: 8,
-                padding: '8px 16px',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              {d === 'todos' ? 'Todos' : d}
-            </button>
-          ))}
-          <AlertasCentral negocios={filtrados} onAbrir={id => setNegocioSelecionado(id)} />
+          </div>
         </div>
+
+        {visao === 'visao_geral' && (
+          <VisaoGeral
+            negocios={negocios}
+            filtrados={filtrados}
+            metrics={metrics}
+            departamentos={departamentos}
+            consultores={consultores}
+            deptSelecionado={deptSelecionado}
+            setDeptSelecionado={setDeptSelecionado}
+            vendedorSelecionado={vendedorSelecionado}
+            setVendedorSelecionado={setVendedorSelecionado}
+            onAbrir={id => setNegocioSelecionado(id)}
+            onAtualizado={carregar}
+          />
+        )}
+
+        {visao === 'pipeline' && (
+          <PipelineBoard
+            filtrados={filtrados}
+            departamentos={departamentos}
+            consultores={consultores}
+            deptSelecionado={deptSelecionado}
+            setDeptSelecionado={setDeptSelecionado}
+            vendedorSelecionado={vendedorSelecionado}
+            setVendedorSelecionado={setVendedorSelecionado}
+            onAbrir={id => setNegocioSelecionado(id)}
+            onAtualizado={carregar}
+          />
+        )}
+
+        {visao === 'clientes' && <Clientes />}
+        {visao === 'atividades' && <Atividades />}
+        {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
+        {visao === 'passagem_bastao' && <PassagemBastao />}
+        {visao === 'relatorios' && <Dashboard />}
       </div>
-
-      {visao === 'indicadores' && <Dashboard />}
-      {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
-
-      {visao === 'kanban' && (
-      <div style={{ padding: 24 }}>
-        <FilaLigar negocios={filtrados} onAbrir={id => setNegocioSelecionado(id)} onAtualizado={carregar} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
-          <CardValor label="Em negociação" valor={totais.emNegociacao} />
-          <CardValor label="Total em aberto" valor={totais.aberto} />
-          <CardValor label="Ganho" valor={totais.ganho} cor="#3b6d11" fundo="#eaf3de" />
-          <CardValor label="Perdido" valor={totais.perdido} cor="#a32d2d" fundo="#fcebeb" />
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
-          {ETAPAS.map(col => {
-            const itens = filtrados.filter(n => n.etapa === col.key)
-            const totalCol = itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-            return (
-              <div key={col.key} style={{ minWidth: 200, flex: '1 0 200px' }}>
-                <div style={{ padding: '8px 10px', background: '#f1efe8', borderRadius: 8, marginBottom: 8 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{col.label}</p>
-                  <p style={{ fontSize: 12, color: '#666', margin: '2px 0 0' }}>{itens.length} · {formatarMoeda(totalCol)}</p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {itens.map(n => {
-                    if (col.key === 'prospeccao') {
-                      return (
-                        <ProspeccaoCard
-                          key={n.id}
-                          negocio={n}
-                          onAtualizado={carregar}
-                          onAbrirDetalhe={() => setNegocioSelecionado(n.id)}
-                        />
-                      )
-                    }
-                    return (
-                      <CardNegocio
-                        key={n.id}
-                        negocio={n}
-                        onClick={() => setNegocioSelecionado(n.id)}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <ListaRetorno negocios={filtrados} onAtualizado={carregar} />
-      </div>
-      )}
 
       {modalAberto && (
         <NovoNegocio
           departamentos={departamentos}
           onFechar={() => setModalAberto(false)}
-          onCriado={() => {
-            setModalAberto(false)
-            carregar()
-          }}
+          onCriado={() => { setModalAberto(false); carregar() }}
         />
       )}
 
       {negocioAtual && (
-        <CardDetalhado
-          negocio={negocioAtual}
-          onFechar={() => setNegocioSelecionado(null)}
-          onAtualizado={carregar}
-        />
+        <CardDetalhado negocio={negocioAtual} onFechar={() => setNegocioSelecionado(null)} onAtualizado={carregar} />
       )}
     </div>
+  )
+}
+
+function calcularMetricas(negocios) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const inicioMesAnterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
+
+  const abertos = negocios.filter(n => ETAPAS_ABERTAS.includes(n.etapa))
+  const pipelineTotal = abertos.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+  const pipelinePonderado = abertos.reduce((s, n) => {
+    const prob = n.probabilidade_fechamento != null ? n.probabilidade_fechamento / 100 : 0.3
+    return s + (n.valor_cotacao || 0) * prob
+  }, 0)
+
+  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
+  const ganhosMesAnterior = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMesAnterior && new Date(n.atualizado_em) < inicioMes)
+  const valorGanhoMes = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+  const valorGanhoMesAnterior = ganhosMesAnterior.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+
+  const perdidosMes = negocios.filter(n => n.etapa === 'perdida' && n.data_perda && new Date(n.data_perda) >= inicioMes)
+  const perdidosMesAnterior = negocios.filter(n => n.etapa === 'perdida' && n.data_perda && new Date(n.data_perda) >= inicioMesAnterior && new Date(n.data_perda) < inicioMes)
+  const conversaoMes = (ganhosMes.length + perdidosMes.length) > 0 ? ganhosMes.length / (ganhosMes.length + perdidosMes.length) * 100 : 0
+  const conversaoMesAnterior = (ganhosMesAnterior.length + perdidosMesAnterior.length) > 0 ? ganhosMesAnterior.length / (ganhosMesAnterior.length + perdidosMesAnterior.length) * 100 : 0
+
+  const followupsAtrasados = abertos.filter(n => n.proxima_acao_data && new Date(n.proxima_acao_data) < agora).length
+
+  return {
+    pipelineTotal, pipelinePonderado, valorGanhoMes,
+    variacaoGanho: valorGanhoMesAnterior > 0 ? ((valorGanhoMes - valorGanhoMesAnterior) / valorGanhoMesAnterior * 100) : null,
+    conversaoMes,
+    variacaoConversao: perdidosMesAnterior.length + ganhosMesAnterior.length > 0 ? (conversaoMes - conversaoMesAnterior) : null,
+    followupsAtrasados,
+  }
+}
+
+function VisaoGeral(props) {
+  const { filtrados, metrics, onAbrir, onAtualizado } = props
+  const followupsHoje = filtrados.filter(n => {
+    if (!n.proxima_acao_data) return false
+    const d = new Date(n.proxima_acao_data)
+    const hoje = new Date()
+    return d.toDateString() === hoje.toDateString()
+  }).length
+  const negociosParados = filtrados.filter(n => {
+    const diasParado = n.atualizado_em ? Math.floor((Date.now() - new Date(n.atualizado_em)) / 86400000) : 0
+    return ETAPAS_ABERTAS.includes(n.etapa) && diasParado > 5
+  })
+  const valorParados = negociosParados.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+        <KpiCard icone={BarChart3} label="Pipeline total" valor={formatarMoeda(metrics.pipelineTotal)} />
+        <KpiCard icone={Scale} label="Pipeline ponderado" valor={formatarMoeda(metrics.pipelinePonderado)} />
+        <KpiCard icone={Trophy} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} corIcone="#3b6d11" />
+        <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
+        <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} corIcone="#a32d2d" />
+      </div>
+
+      <FiltrosLinha {...props} />
+
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <QuadroKanban filtrados={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} colunasVisiveis={5} />
+        </div>
+        <div style={{ width: 300, flexShrink: 0 }}>
+          <FilaLigar negocios={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginTop: 20 }}>
+        <ResumoCard titulo="Follow-ups de hoje" valor={followupsHoje} />
+        <ResumoCard titulo="Negócios parados" valor={negociosParados.length} sub={formatarMoeda(valorParados)} />
+        <ResumoCard titulo="Passagens pendentes" valor="Ver aba" sub="Passagem de bastão" />
+      </div>
+    </div>
+  )
+}
+
+function PipelineBoard(props) {
+  return (
+    <div style={{ padding: 24 }}>
+      <FiltrosLinha {...props} />
+      <QuadroKanban filtrados={props.filtrados} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} />
+    </div>
+  )
+}
+
+function FiltrosLinha({ departamentos, consultores, deptSelecionado, setDeptSelecionado, vendedorSelecionado, setVendedorSelecionado }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <select value={deptSelecionado} onChange={e => setDeptSelecionado(e.target.value)} style={selectStyle}>
+        <option value="todos">Todos os departamentos</option>
+        {departamentos.map(d => <option key={d.id} value={d.nome}>{d.nome}</option>)}
+      </select>
+      <select value={vendedorSelecionado} onChange={e => setVendedorSelecionado(e.target.value)} style={selectStyle}>
+        <option value="todos">Todos os vendedores</option>
+        {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+      </select>
+    </div>
+  )
+}
+
+function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis }) {
+  const etapas = colunasVisiveis === 5
+    ? ETAPAS.filter(e => e.key !== 'ganha' && e.key !== 'perdida')
+    : ETAPAS
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+        {etapas.map(col => {
+          const itens = filtrados.filter(n => n.etapa === col.key)
+          const totalCol = itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+          return (
+            <div key={col.key} style={{ minWidth: 200, flex: '1 0 200px' }}>
+              <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #eee', borderRadius: 8, marginBottom: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{col.label}</p>
+                <p style={{ fontSize: 12, color: '#666', margin: '2px 0 0' }}>{itens.length} negócios · {formatarMoeda(totalCol)}</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {itens.map(n => {
+                  if (col.key === 'prospeccao') {
+                    return <ProspeccaoCard key={n.id} negocio={n} onAtualizado={onAtualizado} onAbrirDetalhe={() => onAbrir(n.id)} />
+                  }
+                  return <CardNegocio key={n.id} negocio={n} onClick={() => onAbrir(n.id)} />
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <ListaRetorno negocios={filtrados} onAtualizado={onAtualizado} />
+    </>
   )
 }
 
@@ -176,49 +286,41 @@ function CardNegocio({ negocio, onClick }) {
   const temp = CORES_TEMPERATURA[negocio.temperatura]
   const notaPci = negocio.avaliacoes_pci?.[0]?.nota_total
   const pci = notaPci !== undefined ? classificarPci(notaPci) : null
-  const diasParado = negocio.atualizado_em
-    ? Math.floor((Date.now() - new Date(negocio.atualizado_em)) / 86400000)
-    : null
   const atrasado = negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
+  const corBorda = negocio.urgencia === 'alta' ? '#F77E01' : (pci ? pci.cor : '#ddd')
 
   return (
     <div
       onClick={onClick}
       style={{
         background: temp ? temp.grad : '#fff',
-        border: atrasado ? '2px solid #c0392b' : (temp ? 'none' : '1px solid #eee'),
-        borderRadius: 12,
+        border: temp ? 'none' : '1px solid #eee',
+        borderLeft: `4px solid ${atrasado ? '#c0392b' : corBorda}`,
+        borderRadius: 10,
         padding: '10px 12px',
         cursor: 'pointer',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: temp ? temp.titulo : '#222' }}>
+        <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: temp ? temp.titulo : '#222' }}>
           {negocio.cliente?.razao_social}
         </p>
         {pci && (
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor,
-            borderRadius: 4, padding: '1px 5px',
-          }}>
-            {pci.sigla}
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor, borderRadius: 4, padding: '1px 5px' }}>
+            PCI {pci.sigla}
           </span>
         )}
       </div>
-      <p style={{ fontSize: 13, margin: '4px 0 0', color: temp ? temp.titulo : '#222' }}>
+      {negocio.produto_servico && (
+        <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>{negocio.produto_servico}</p>
+      )}
+      <p style={{ fontSize: 13, margin: '4px 0 0', fontWeight: 600, color: temp ? temp.titulo : '#222' }}>
         {formatarMoeda(negocio.valor_cotacao)}
       </p>
-      <p style={{ fontSize: 11, margin: '4px 0 0', color: temp ? temp.sub : '#777' }}>
-        {negocio.consultor?.nome}
-      </p>
+      <p style={{ fontSize: 11, margin: '4px 0 0', color: temp ? temp.sub : '#777' }}>{negocio.consultor?.nome}</p>
       {negocio.proxima_acao_data && (
         <p style={{ fontSize: 11, margin: '4px 0 0', color: atrasado ? '#c0392b' : (temp ? temp.sub : '#777'), fontWeight: atrasado ? 700 : 400 }}>
           {atrasado ? '⚠ ' : ''}Próx: {new Date(negocio.proxima_acao_data).toLocaleDateString('pt-BR')}
-        </p>
-      )}
-      {diasParado !== null && diasParado > 0 && (
-        <p style={{ fontSize: 10, margin: '2px 0 0', color: temp ? temp.sub : '#999' }}>
-          {diasParado} dia(s) sem movimentação
         </p>
       )}
     </div>
@@ -226,21 +328,14 @@ function CardNegocio({ negocio, onClick }) {
 }
 
 function ListaRetorno({ negocios, onAtualizado }) {
-  const itens = negocios
-    .filter(n => n.etapa === 'retorno_futuro')
-    .sort((a, b) => (a.data_retorno || '').localeCompare(b.data_retorno || ''))
-
+  const itens = negocios.filter(n => n.etapa === 'retorno_futuro').sort((a, b) => (a.data_retorno || '').localeCompare(b.data_retorno || ''))
   if (itens.length === 0) return null
-
   return (
     <div style={{ marginTop: 24 }}>
       <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Lista de retorno ({itens.length})</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {itens.map(n => (
-          <div key={n.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: '8px 12px',
-          }}>
+          <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: '8px 12px' }}>
             <div>
               <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{n.cliente?.razao_social}</p>
               <p style={{ fontSize: 11, color: '#777', margin: '2px 0 0' }}>
@@ -249,10 +344,7 @@ function ListaRetorno({ negocios, onAtualizado }) {
             </div>
             <button
               onClick={async () => { await voltarParaProspeccao(n.id); onAtualizado() }}
-              style={{
-                background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6,
-                padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600,
-              }}
+              style={{ background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
             >
               Voltar pra prospecção
             </button>
@@ -263,11 +355,35 @@ function ListaRetorno({ negocios, onAtualizado }) {
   )
 }
 
-function CardValor({ label, valor, cor, fundo }) {
+function KpiCard({ icone: Icone, label, valor, variacao, corIcone, sufixoVariacao = '%' }) {
   return (
-    <div style={{ background: fundo || '#f1efe8', borderRadius: 8, padding: 16 }}>
-      <p style={{ fontSize: 13, color: cor || '#666', margin: '0 0 4px' }}>{label}</p>
-      <p style={{ fontSize: 22, fontWeight: 600, margin: 0, color: cor || '#222' }}>{formatarMoeda(valor)}</p>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <p style={{ fontSize: 12, color: '#777', margin: '0 0 6px' }}>{label}</p>
+        <div style={{ background: '#FFF3E8', borderRadius: 6, padding: 6 }}>
+          <Icone size={16} color={corIcone || '#F77E01'} />
+        </div>
+      </div>
+      <p style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{valor}</p>
+      {variacao !== null && variacao !== undefined && (
+        <p style={{ fontSize: 11, margin: '4px 0 0', color: variacao >= 0 ? '#3b6d11' : '#a32d2d' }}>
+          {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao).toFixed(1)}{sufixoVariacao} vs mês anterior
+        </p>
+      )}
     </div>
   )
+}
+
+function ResumoCard({ titulo, valor, sub }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16 }}>
+      <p style={{ fontSize: 12, color: '#777', margin: '0 0 6px' }}>{titulo}</p>
+      <p style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{valor}</p>
+      {sub && <p style={{ fontSize: 11, color: '#999', margin: '4px 0 0' }}>{sub}</p>}
+    </div>
+  )
+}
+
+const selectStyle = {
+  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, background: '#fff',
 }

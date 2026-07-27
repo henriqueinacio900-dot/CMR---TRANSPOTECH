@@ -293,11 +293,14 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [novaEtapa, setNovaEtapa] = useState(negocio.etapa)
   const [mostrarPerdida, setMostrarPerdida] = useState(false)
   const [mostrarGanha, setMostrarGanha] = useState(false)
+  const [mostrarExigirAcao, setMostrarExigirAcao] = useState(false)
   const [motivos, setMotivos] = useState([])
   const [motivoId, setMotivoId] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [concorrente, setConcorrente] = useState('')
   const [valorFinal, setValorFinal] = useState(negocio.valor_cotacao || '')
+  const [proximaAcaoNova, setProximaAcaoNova] = useState('')
+  const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
@@ -309,9 +312,30 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     if (novaEtapa === 'perdida') { setMostrarPerdida(true); return }
     if (novaEtapa === 'ganha') { setMostrarGanha(true); return }
 
+    // Toda oportunidade aberta precisa de próxima ação — se não tem, exige antes de mover
+    if (!negocio.proxima_acao || !negocio.proxima_acao_data) {
+      setMostrarExigirAcao(true)
+      return
+    }
+
     setSalvando(true)
     try {
       await moverEtapa(negocio.id, novaEtapa)
+      onAtualizado()
+      onFechar()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function confirmarComProximaAcao() {
+    if (!proximaAcaoNova || !proximaAcaoDataNova) return
+    setSalvando(true)
+    try {
+      await moverEtapa(negocio.id, novaEtapa, {
+        proxima_acao: proximaAcaoNova,
+        proxima_acao_data: proximaAcaoDataNova,
+      })
       onAtualizado()
       onFechar()
     } finally {
@@ -345,7 +369,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
 
   return (
     <div style={{ borderTop: '1px solid #eee', padding: '12px 20px' }}>
-      {!mostrarPerdida && !mostrarGanha && (
+      {!mostrarPerdida && !mostrarGanha && !mostrarExigirAcao && (
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={novaEtapa} onChange={e => setNovaEtapa(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             {ETAPAS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
@@ -353,6 +377,25 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
           <button onClick={aplicarMudanca} disabled={salvando || novaEtapa === negocio.etapa} style={botaoPequeno}>
             {salvando ? 'Movendo...' : 'Mover'}
           </button>
+        </div>
+      )}
+
+      {mostrarExigirAcao && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ fontWeight: 600, fontSize: 13, margin: 0, color: '#a32d2d' }}>
+            Toda oportunidade aberta precisa de uma próxima ação antes de mudar de etapa
+          </p>
+          <select value={proximaAcaoNova} onChange={e => setProximaAcaoNova(e.target.value)} style={inputStyle}>
+            <option value="">Próxima ação...</option>
+            {PROXIMAS_ACOES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+          <input type="datetime-local" value={proximaAcaoDataNova} onChange={e => setProximaAcaoDataNova(e.target.value)} style={inputStyle} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setMostrarExigirAcao(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+            <button onClick={confirmarComProximaAcao} disabled={salvando || !proximaAcaoNova || !proximaAcaoDataNova} style={botaoPequeno}>
+              Confirmar e mover
+            </button>
+          </div>
         </div>
       )}
 

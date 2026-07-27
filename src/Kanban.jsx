@@ -4,6 +4,8 @@ import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci }
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
+import FilaLigar from './FilaLigar.jsx'
+import AlertasCentral from './AlertasCentral.jsx'
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
@@ -74,10 +76,13 @@ export default function Kanban() {
               {d === 'todos' ? 'Todos' : d}
             </button>
           ))}
+          <AlertasCentral negocios={filtrados} onAbrir={id => setNegocioSelecionado(id)} />
         </div>
       </div>
 
       <div style={{ padding: 24 }}>
+        <FilaLigar negocios={filtrados} onAbrir={id => setNegocioSelecionado(id)} onAtualizado={carregar} />
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
           <CardValor label="Em negociação" valor={totais.emNegociacao} />
           <CardValor label="Total em aberto" valor={totais.aberto} />

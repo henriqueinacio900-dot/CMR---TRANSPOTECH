@@ -150,6 +150,17 @@ export async function voltarParaProspeccao(negocioId) {
   return moverEtapa(negocioId, 'prospeccao', { data_retorno: null })
 }
 
+export async function listarConfiguracoesAutomacao() {
+  const { data, error } = await supabase.from('configuracoes_automacao').select('*')
+  if (error) { console.error(error); return {} }
+  const mapa = {}
+  data.forEach(c => { mapa[c.chave] = c.valor })
+  return mapa
+}
+
+export async function adiarProximaAcao(negocioId, novaData) {
+  return atualizarNegocio(negocioId, { proxima_acao_data: novaData })
+}
 export async function listarMotivosPerda() {
   const { data, error } = await supabase.from('motivos_perda').select('*').order('descricao')
   if (error) { console.error(error); return [] }

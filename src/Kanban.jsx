@@ -98,7 +98,14 @@ export default function Kanban() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {itens.map(n => {
                     if (col.key === 'prospeccao') {
-                      return <ProspeccaoCard key={n.id} negocio={n} onAtualizado={carregar} />
+                      return (
+                        <ProspeccaoCard
+                          key={n.id}
+                          negocio={n}
+                          onAtualizado={carregar}
+                          onAbrirDetalhe={() => setNegocioSelecionado(n.id)}
+                        />
+                      )
                     }
                     return (
                       <CardNegocio

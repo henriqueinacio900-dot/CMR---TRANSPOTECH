@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle } from 'lucide-react'
-import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor } from './api'
+import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut } from 'lucide-react'
+import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
@@ -90,6 +90,17 @@ export default function Kanban() {
             {euMesmo?.nome && (
               <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{euMesmo.nome}</span>
             )}
+            <button
+              onClick={() => sair()}
+              title="Sair"
+              style={{
+                background: 'none', color: '#999', border: '1px solid #ddd',
+                borderRadius: 8, padding: '9px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <LogOut size={16} />
+            </button>
             <button
               onClick={() => setModalAberto(true)}
               style={{

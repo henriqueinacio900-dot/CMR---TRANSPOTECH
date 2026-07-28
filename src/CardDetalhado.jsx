@@ -423,7 +423,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarGanha() {
-    if (!valorFinal || !numeroPedido || !departamentoDestinoId || !responsavelOperacionalId) return
+    if (!valorFinal || !departamentoDestinoId || !responsavelOperacionalId) return
     setSalvando(true)
     try {
       await marcarGanha(negocio.id, { valor_final: Number(valorFinal) })
@@ -433,7 +433,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
         produto_servico: negocio.produto_servico || null,
         escopo_vendido: escopoVendido || null,
         valor_final: Number(valorFinal),
-        numero_pedido: numeroPedido,
+        numero_pedido: numeroPedido || null,
         data_aprovacao: dataAprovacao,
         local_atendimento: localAtendimento || null,
         prazo_prometido: prazoPrometido || null,
@@ -504,7 +504,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha + passagem de bastão</p>
           <input type="number" placeholder="Valor final (R$) *" value={valorFinal} onChange={e => setValorFinal(e.target.value)} style={inputStyle} />
           <input placeholder="Escopo vendido" value={escopoVendido} onChange={e => setEscopoVendido(e.target.value)} style={inputStyle} />
-          <input placeholder="Número do pedido *" value={numeroPedido} onChange={e => setNumeroPedido(e.target.value)} style={inputStyle} />
+          <input placeholder="Número do pedido" value={numeroPedido} onChange={e => setNumeroPedido(e.target.value)} style={inputStyle} />
           <input type="date" placeholder="Data da aprovação" value={dataAprovacao} onChange={e => setDataAprovacao(e.target.value)} style={inputStyle} />
           <input placeholder="Local de atendimento/entrega" value={localAtendimento} onChange={e => setLocalAtendimento(e.target.value)} style={inputStyle} />
           <input placeholder="Prazo prometido (ex: 10 dias, 15/08)" value={prazoPrometido} onChange={e => setPrazoPrometido(e.target.value)} style={inputStyle} />
@@ -524,7 +524,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button
               onClick={confirmarGanha}
-              disabled={salvando || !valorFinal || !numeroPedido || !departamentoDestinoId || !responsavelOperacionalId}
+              disabled={salvando || !valorFinal || !departamentoDestinoId || !responsavelOperacionalId}
               style={{ ...botaoPequeno, background: '#3b6d11' }}
             >
               Confirmar venda e enviar pra operação

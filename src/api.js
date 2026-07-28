@@ -406,6 +406,10 @@ export async function atualizarStatusPassagem(id, status) {
   return data
 }
 
+export async function sair() {
+  return supabase.auth.signOut()
+}
+
 export async function contarInteracoesMes() {
   const inicioMes = new Date()
   inicioMes.setDate(1)

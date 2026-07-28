@@ -153,6 +153,14 @@ export const PERGUNTAS_PCI = [
     ],
   },
 ]
+
+export function classificarPci(notaTotal) {
+  if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
+  if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }
+  if (notaTotal >= 10) return { sigla: 'C', label: 'Potencial médio', cor: '#8a6d1f' }
+  return { sigla: 'D', label: 'Baixa prioridade', cor: '#666' }
+}
+
 export const SEQUENCIA_ORCAMENTO = [
   { chave: 'dias_orcamento_confirmar', label: 'Confirmar recebimento', proxima_acao: 'ligacao' },
   { chave: 'dias_orcamento_duvidas', label: 'Verificar percepção e dúvidas', proxima_acao: 'ligacao' },
@@ -160,11 +168,13 @@ export const SEQUENCIA_ORCAMENTO = [
   { chave: 'dias_orcamento_objecoes', label: 'Trabalhar objeções', proxima_acao: 'reuniao' },
   { chave: 'dias_orcamento_definicao', label: 'Solicitar definição ou reagendar', proxima_acao: 'cobrar_decisao' },
 ]
-export function classificarPci(notaTotal) {
-  if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
-  if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }
-  if (notaTotal >= 10) return { sigla: 'C', label: 'Potencial médio', cor: '#8a6d1f' }
-  return { sigla: 'D', label: 'Baixa prioridade', cor: '#666' }
+
+export function formatarTelefoneInput(valor) {
+  const digitos = valor.replace(/\D/g, '').slice(0, 11)
+  if (digitos.length <= 2) return `(${digitos}`
+  if (digitos.length <= 6) return `(${digitos.slice(0, 2)}) ${digitos.slice(2)}`
+  if (digitos.length <= 10) return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`
+  return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
 }
 
 export function formatarMoeda(valor) {

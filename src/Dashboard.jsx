@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao } from './api'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer as RRC, Legend as RLegend } from 'recharts'
+import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal } from './api'
 import { classificarPci, formatarMoeda } from './constants'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
@@ -15,20 +16,32 @@ export default function Dashboard() {
   const [negocios, setNegocios] = useState([])
   const [contatosMes, setContatosMes] = useState(0)
   const [config, setConfig] = useState({})
+  const [consultores, setConsultores] = useState([])
+  const [metas, setMetas] = useState([])
   const [carregando, setCarregando] = useState(true)
 
+  const agora = new Date()
+
   useEffect(() => {
-    Promise.all([listarNegocios(), contarInteracoesMes(), listarConfiguracoesAutomacao()]).then(([n, c, cfg]) => {
-      setNegocios(n)
-      setContatosMes(c)
-      setConfig(cfg)
-      setCarregando(false)
-    })
+    carregarTudo()
   }, [])
+
+  async function carregarTudo() {
+    setCarregando(true)
+    const [n, c, cfg, cons, m] = await Promise.all([
+      listarNegocios(), contarInteracoesMes(), listarConfiguracoesAutomacao(),
+      listarConsultores(), listarMetasMes(agora.getFullYear(), agora.getMonth() + 1),
+    ])
+    setNegocios(n)
+    setContatosMes(c)
+    setConfig(cfg)
+    setConsultores(cons)
+    setMetas(m)
+    setCarregando(false)
+  }
 
   if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
 
-  const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
 
   const abertos = negocios.filter(n => ETAPAS_ABERTAS.includes(n.etapa))
@@ -111,6 +124,138 @@ export default function Dashboard() {
       <Secao titulo="Conversão por departamento">
         <TabelaConversao dados={porDepartamento} />
       </Secao>
+
+      <Secao titulo="Metas do mês (por consultor)">
+        <PainelMetasAdmin consultores={consultores} metas={metas} ano={agora.getFullYear()} mes={agora.getMonth() + 1} onSalvo={carregarTudo} />
+      </Secao>
+
+      <Secao titulo="Produtividade (faturamento x meta acumulados no mês)">
+        <GraficoProdutividade negocios={negocios} metas={metas} />
+      </Secao>
+
+      <Secao titulo="Rankings Top 5">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
+          <RankingTop5 titulo="Prospecção" negocios={negocios} etapa="prospeccao" />
+          <RankingTop5 titulo="Orçamento enviado" negocios={negocios} etapa="orcamento_enviado" />
+          <RankingTop5 titulo="Em negociação" negocios={negocios} etapa="negociacao_decisao" />
+          <RankingTop5 titulo="Negócios ganhos" negocios={negocios} etapa="ganha" mostrarValor />
+        </div>
+      </Secao>
+    </div>
+  )
+}
+
+function PainelMetasAdmin({ consultores, metas, ano, mes, onSalvo }) {
+  const [valores, setValores] = useState(() => {
+    const mapa = {}
+    consultores.forEach(c => {
+      const m = metas.find(x => x.consultor_id === c.id)
+      mapa[c.id] = m ? m.valor_meta : ''
+    })
+    return mapa
+  })
+  const [salvandoId, setSalvandoId] = useState(null)
+
+  async function salvar(consultorId) {
+    setSalvandoId(consultorId)
+    try {
+      await salvarMetaMensal(consultorId, ano, mes, Number(valores[consultorId] || 0))
+      onSalvo()
+    } finally {
+      setSalvandoId(null)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {consultores.map(c => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <span style={{ width: 140, fontWeight: 600 }}>{c.nome}</span>
+          <input
+            type="number"
+            placeholder="Meta (R$)"
+            value={valores[c.id] ?? ''}
+            onChange={e => setValores({ ...valores, [c.id]: e.target.value })}
+            style={{ padding: 6, borderRadius: 6, border: '1px solid #ddd', width: 160, fontSize: 13 }}
+          />
+          <button
+            onClick={() => salvar(c.id)}
+            disabled={salvandoId === c.id}
+            style={{ background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+          >
+            {salvandoId === c.id ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      ))}
+      {consultores.length === 0 && <p style={{ color: '#999', fontSize: 13 }}>Nenhum consultor cadastrado.</p>}
+    </div>
+  )
+}
+
+function GraficoProdutividade({ negocios, metas }) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0)
+  const metaTotalMes = metas.reduce((s, m) => s + (m.valor_meta || 0), 0)
+
+  const ganhosMes = negocios
+    .filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
+    .sort((a, b) => new Date(a.atualizado_em) - new Date(b.atualizado_em))
+
+  const dados = []
+  let acumuladoFaturamento = 0
+  const totalDias = fimMes.getDate()
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const dataDia = new Date(agora.getFullYear(), agora.getMonth(), dia)
+    if (dataDia > agora) break
+    const ganhosDoDia = ganhosMes.filter(n => new Date(n.atualizado_em).getDate() === dia)
+    acumuladoFaturamento += ganhosDoDia.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+    const metaAcumulada = metaTotalMes * (dia / totalDias)
+    dados.push({ dia: `${dia}`, faturamento: Math.round(acumuladoFaturamento), meta: Math.round(metaAcumulada) })
+  }
+
+  if (metaTotalMes === 0) {
+    return <p style={{ color: '#999', fontSize: 13 }}>Cadastre pelo menos uma meta acima pra ver o gráfico.</p>
+  }
+
+  return (
+    <RRC width="100%" height={260}>
+      <LineChart data={dados}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="dia" fontSize={11} />
+        <YAxis fontSize={11} tickFormatter={v => formatarMoeda(v)} width={90} />
+        <RTooltip formatter={v => formatarMoeda(v)} />
+        <RLegend />
+        <Line type="monotone" dataKey="meta" name="Meta" stroke="#2F6FB0" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="faturamento" name="Faturamento" stroke="#F77E01" strokeWidth={2} dot={false} />
+      </LineChart>
+    </RRC>
+  )
+}
+
+function RankingTop5({ titulo, negocios, etapa, mostrarValor }) {
+  const mapa = {}
+  negocios.filter(n => n.etapa === etapa).forEach(n => {
+    const nome = n.consultor?.nome || 'Sem consultor'
+    if (!mapa[nome]) mapa[nome] = { qtd: 0, valor: 0 }
+    mapa[nome].qtd++
+    mapa[nome].valor += (n.valor_final || n.valor_cotacao || 0)
+  })
+  const lista = Object.entries(mapa)
+    .map(([nome, v]) => ({ nome, ...v }))
+    .sort((a, b) => b.qtd - a.qtd)
+    .slice(0, 5)
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{titulo}</p>
+      {lista.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem dados ainda.</p>}
+      {lista.map((l, i) => (
+        <div key={l.nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid #f2f2f2' }}>
+          <span>{i + 1}. {l.nome}</span>
+          <span style={{ fontWeight: 600 }}>{l.qtd}{mostrarValor ? ` · ${formatarMoeda(l.valor)}` : ''}</span>
+        </div>
+      ))}
     </div>
   )
 }

@@ -406,6 +406,22 @@ export async function atualizarStatusPassagem(id, status) {
   return data
 }
 
+export async function listarMetasMes(ano, mes) {
+  const { data, error } = await supabase.from('metas_mensais').select('*, consultor:consultores(nome)').eq('ano', ano).eq('mes', mes)
+  if (error) { console.error(error); return [] }
+  return data
+}
+
+export async function salvarMetaMensal(consultorId, ano, mes, valorMeta) {
+  const { data, error } = await supabase
+    .from('metas_mensais')
+    .upsert({ consultor_id: consultorId, ano, mes, valor_meta: valorMeta }, { onConflict: 'consultor_id,ano,mes' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function sair() {
   return supabase.auth.signOut()
 }

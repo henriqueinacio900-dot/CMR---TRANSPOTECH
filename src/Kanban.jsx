@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut } from 'lucide-react'
-import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair } from './api'
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon } from 'lucide-react'
+import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
@@ -28,16 +29,20 @@ export default function Kanban() {
   const [negocioSelecionado, setNegocioSelecionado] = useState(null)
   const [visao, setVisao] = useState('visao_geral')
   const [busca, setBusca] = useState('')
+  const [metas, setMetas] = useState([])
 
   async function carregar() {
     setCarregando(true)
-    const [deps, negs, cons, eu] = await Promise.all([
+    const agora = new Date()
+    const [deps, negs, cons, eu, metasDoMes] = await Promise.all([
       listarDepartamentos(), listarNegocios(), listarConsultores(), getMeuConsultor(),
+      listarMetasMes(agora.getFullYear(), agora.getMonth() + 1),
     ])
     setDepartamentos(deps)
     setNegocios(negs)
     setConsultores(cons)
     setEuMesmo(eu)
+    setMetas(metasDoMes)
     setCarregando(false)
   }
 
@@ -132,6 +137,9 @@ export default function Kanban() {
         {visao === 'pipeline' && (
           <PipelineBoard
             filtrados={filtrados}
+            negocios={negocios}
+            euMesmo={euMesmo}
+            metas={metas}
             departamentos={departamentos}
             consultores={consultores}
             deptSelecionado={deptSelecionado}
@@ -189,13 +197,47 @@ function calcularMetricas(negocios) {
 
   const followupsAtrasados = abertos.filter(n => n.proxima_acao_data && new Date(n.proxima_acao_data) < agora).length
 
+  const ganhosTotal = negocios.filter(n => n.etapa === 'ganha')
+  const ticketMedio = ganhosTotal.length > 0
+    ? ganhosTotal.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / ganhosTotal.length
+    : 0
+
   return {
-    pipelineTotal, pipelinePonderado, valorGanhoMes,
+    pipelineTotal, pipelinePonderado, valorGanhoMes, ticketMedio,
     variacaoGanho: valorGanhoMesAnterior > 0 ? ((valorGanhoMes - valorGanhoMesAnterior) / valorGanhoMesAnterior * 100) : null,
     conversaoMes,
     variacaoConversao: perdidosMesAnterior.length + ganhosMesAnterior.length > 0 ? (conversaoMes - conversaoMesAnterior) : null,
     followupsAtrasados,
   }
+}
+
+const CORES_ROSCA = { quente: '#C1440E', morno: '#C68A1E', frio: '#2F6FB0' }
+const LABEL_ROSCA = { quente: 'Quente', morno: 'Morno', frio: 'Frio' }
+
+function GraficoTemperatura({ filtrados }) {
+  const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao_decisao')
+  const dados = ['quente', 'morno', 'frio']
+    .map(t => ({ nome: LABEL_ROSCA[t], valor: emNegociacao.filter(n => n.temperatura === t).length, chave: t }))
+    .filter(d => d.valor > 0)
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px', maxWidth: 340 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>Temperatura em negociação</p>
+      {dados.length === 0 ? (
+        <p style={{ fontSize: 12, color: '#999' }}>Nenhum negócio em negociação agora.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}>
+              {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
 }
 
 function VisaoGeral(props) {
@@ -216,10 +258,14 @@ function VisaoGeral(props) {
     <div style={{ padding: 24 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard icone={BarChart3} label="Pipeline total" valor={formatarMoeda(metrics.pipelineTotal)} />
-        <KpiCard icone={Scale} label="Pipeline ponderado" valor={formatarMoeda(metrics.pipelinePonderado)} />
         <KpiCard icone={Trophy} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} corIcone="#3b6d11" />
         <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
+        <KpiCard icone={Scale} label="Ticket médio (TKM)" valor={formatarMoeda(metrics.ticketMedio)} />
         <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} corIcone="#a32d2d" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <GraficoTemperatura filtrados={filtrados} />
       </div>
 
       <FiltrosLinha {...props} />
@@ -245,8 +291,72 @@ function VisaoGeral(props) {
 function PipelineBoard(props) {
   return (
     <div style={{ padding: 24 }}>
+      <PainelMeta negocios={props.negocios} euMesmo={props.euMesmo} metas={props.metas} />
       <FiltrosLinha {...props} />
       <QuadroKanban filtrados={props.filtrados} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} />
+    </div>
+  )
+}
+
+function diasUteisRestantes() {
+  const hoje = new Date()
+  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+  let dias = 0
+  const cursor = new Date(hoje)
+  while (cursor <= fimMes) {
+    const diaSemana = cursor.getDay()
+    if (diaSemana !== 0 && diaSemana !== 6) dias++
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dias
+}
+
+function PainelMeta({ negocios, euMesmo, metas }) {
+  if (!euMesmo) return null
+
+  const minhaMeta = metas.find(m => m.consultor_id === euMesmo.id)
+  const meusNegocios = negocios.filter(n => n.consultor?.id === euMesmo.id)
+  const meusGanhos = meusNegocios.filter(n => n.etapa === 'ganha')
+  const meusPerdidos = meusNegocios.filter(n => n.etapa === 'perdida')
+  const tkm = meusGanhos.length > 0 ? meusGanhos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / meusGanhos.length : 0
+  const conversao = (meusGanhos.length + meusPerdidos.length) > 0 ? meusGanhos.length / (meusGanhos.length + meusPerdidos.length) * 100 : 0
+
+  if (!minhaMeta || !minhaMeta.valor_meta) {
+    return (
+      <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: '#999', margin: 0 }}>
+          Nenhuma meta cadastrada pra você esse mês ainda — peça pro administrador cadastrar em Relatórios.
+        </p>
+      </div>
+    )
+  }
+
+  const vendasNecessarias = tkm > 0 ? minhaMeta.valor_meta / tkm : 0
+  const dias = diasUteisRestantes()
+  const vendasPorDia = dias > 0 ? vendasNecessarias / dias : 0
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Minha meta do mês</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10 }}>
+        <MetaCard label="Meta" valor={formatarMoeda(minhaMeta.valor_meta)} />
+        <MetaCard label="Ticket médio" valor={formatarMoeda(tkm)} />
+        <MetaCard label="Conversão" valor={`${conversao.toFixed(0)}%`} />
+        <MetaCard label="Vendas necessárias" valor={vendasNecessarias.toFixed(1)} />
+        <MetaCard label="Vendas por dia útil" valor={vendasPorDia.toFixed(2)} cor="#F77E01" />
+      </div>
+      <p style={{ fontSize: 11, color: '#999', margin: '8px 0 0' }}>
+        Considerando {dias} dia(s) útil(eis) restante(s) no mês (aproximado, exclui só sábado/domingo).
+      </p>
+    </div>
+  )
+}
+
+function MetaCard({ label, valor, cor }) {
+  return (
+    <div style={{ background: '#f7f5f0', borderRadius: 8, padding: 10, textAlign: 'center' }}>
+      <p style={{ fontSize: 11, color: '#777', margin: '0 0 4px' }}>{label}</p>
+      <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: cor || '#222' }}>{valor}</p>
     </div>
   )
 }

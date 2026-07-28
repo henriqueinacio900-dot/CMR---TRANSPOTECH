@@ -226,7 +226,7 @@ function VisaoGeral(props) {
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <QuadroKanban filtrados={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} colunasVisiveis={5} />
+          <QuadroKanban filtrados={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} colunasVisiveis={7} />
         </div>
         <div style={{ width: 300, flexShrink: 0 }}>
           <FilaLigar negocios={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} />

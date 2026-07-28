@@ -7,7 +7,7 @@ import {
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
-  formatarMoeda, formatarData,
+  formatarMoeda, formatarData, formatarTelefoneInput,
 } from './constants'
 import PciForm from './PciForm.jsx'
 
@@ -148,7 +148,7 @@ function AbaCliente({ negocio }) {
 
       <div style={{ display: 'flex', gap: 6 }}>
         <input placeholder="Nome" value={novoNome} onChange={e => setNovoNome(e.target.value)} style={inputStyle} />
-        <input placeholder="Telefone" value={novoTelefone} onChange={e => setNovoTelefone(e.target.value)} style={inputStyle} />
+        <input placeholder="Telefone" value={novoTelefone} onChange={e => setNovoTelefone(formatarTelefoneInput(e.target.value))} style={inputStyle} />
         <button onClick={adicionar} style={botaoPequeno}>+ Adicionar</button>
       </div>
     </div>
@@ -379,12 +379,6 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     if (novaEtapa === 'perdida') { setMostrarPerdida(true); return }
     if (novaEtapa === 'ganha') { setMostrarGanha(true); return }
 
-    // Toda oportunidade aberta precisa de próxima ação — se não tem, exige antes de mover
-    if (!negocio.proxima_acao || !negocio.proxima_acao_data) {
-      setMostrarExigirAcao(true)
-      return
-    }
-
     setSalvando(true)
     try {
       await moverEtapa(negocio.id, novaEtapa)
@@ -411,10 +405,9 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarPerdida() {
-    if (!motivoId) return
     setSalvando(true)
     try {
-      await marcarPerdida(negocio.id, { motivo_perda_id: motivoId, observacoes, concorrente: concorrente || null, pode_reativar: true })
+      await marcarPerdida(negocio.id, { motivo_perda_id: motivoId || null, observacoes, concorrente: concorrente || null, pode_reativar: true })
       onAtualizado()
       onFechar()
     } finally {
@@ -423,24 +416,23 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarGanha() {
-    if (!valorFinal || !numeroPedido || !departamentoDestinoId || !responsavelOperacionalId) return
     setSalvando(true)
     try {
-      await marcarGanha(negocio.id, { valor_final: Number(valorFinal) })
+      await marcarGanha(negocio.id, { valor_final: valorFinal ? Number(valorFinal) : negocio.valor_cotacao })
       await criarPassagemBastao({
         negocio_id: negocio.id,
         cliente_id: negocio.cliente?.id,
         produto_servico: negocio.produto_servico || null,
         escopo_vendido: escopoVendido || null,
-        valor_final: Number(valorFinal),
-        numero_pedido: numeroPedido,
-        data_aprovacao: dataAprovacao,
+        valor_final: valorFinal ? Number(valorFinal) : (negocio.valor_cotacao || null),
+        numero_pedido: numeroPedido || null,
+        data_aprovacao: dataAprovacao || null,
         local_atendimento: localAtendimento || null,
         prazo_prometido: prazoPrometido || null,
         condicoes_comerciais: condicoesComerciais || null,
         condicoes_especiais: condicoesEspeciais || null,
-        departamento_destino_id: departamentoDestinoId,
-        responsavel_operacional_id: responsavelOperacionalId,
+        departamento_destino_id: departamentoDestinoId || null,
+        responsavel_operacional_id: responsavelOperacionalId || null,
         observacoes_vendedor: observacoesVendedor || null,
         riscos: riscos || null,
       })
@@ -494,7 +486,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
           <textarea placeholder="Observação" rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} style={inputStyle} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarPerdida(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
-            <button onClick={confirmarPerdida} disabled={salvando || !motivoId} style={{ ...botaoPequeno, background: '#a32d2d' }}>Confirmar perda</button>
+            <button onClick={confirmarPerdida} disabled={salvando} style={{ ...botaoPequeno, background: '#a32d2d' }}>Confirmar perda</button>
           </div>
         </div>
       )}
@@ -524,7 +516,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button
               onClick={confirmarGanha}
-              disabled={salvando || !valorFinal || !numeroPedido || !departamentoDestinoId || !responsavelOperacionalId}
+              disabled={salvando}
               style={{ ...botaoPequeno, background: '#3b6d11' }}
             >
               Confirmar venda e enviar pra operação

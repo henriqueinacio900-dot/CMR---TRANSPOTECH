@@ -125,6 +125,10 @@ export default function Dashboard() {
         <TabelaConversao dados={porDepartamento} />
       </Secao>
 
+      <Secao titulo="Desconto concedido no mês (por vendedor e departamento)">
+        <PainelDesconto negocios={negocios} />
+      </Secao>
+
       <Secao titulo="Metas do mês (por consultor)">
         <PainelMetasAdmin consultores={consultores} metas={metas} ano={agora.getFullYear()} mes={agora.getMonth() + 1} onSalvo={carregarTudo} />
       </Secao>
@@ -145,6 +149,58 @@ export default function Dashboard() {
           <RankingTop5 titulo="Negócios ganhos" negocios={negocios} etapa="ganha" mostrarValor />
         </div>
       </Secao>
+    </div>
+  )
+}
+
+function PainelDesconto({ negocios }) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
+
+  const totalDesconto = ganhosMes.reduce((s, n) => s + (n.desconto_valor || 0), 0)
+
+  function agruparDesconto(chaveFn) {
+    const mapa = {}
+    ganhosMes.forEach(n => {
+      const chave = chaveFn(n)
+      if (!mapa[chave]) mapa[chave] = { desconto: 0, vendas: 0, valorBruto: 0 }
+      mapa[chave].desconto += (n.desconto_valor || 0)
+      mapa[chave].vendas++
+      mapa[chave].valorBruto += (n.valor_cotacao || 0)
+    })
+    return Object.entries(mapa)
+      .map(([nome, v]) => ({ nome, ...v, percentual: v.valorBruto > 0 ? (v.desconto / v.valorBruto * 100) : 0 }))
+      .sort((a, b) => b.desconto - a.desconto)
+  }
+
+  const porVendedor = agruparDesconto(n => n.consultor?.nome || 'Sem consultor')
+  const porDepartamento = agruparDesconto(n => n.departamento?.nome || 'Sem departamento')
+
+  return (
+    <div>
+      <p style={{ fontSize: 13, margin: '0 0 12px' }}>
+        Total de desconto dado esse mês: <strong style={{ color: '#a32d2d' }}>{formatarMoeda(totalDesconto)}</strong>
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
+        <TabelaDesconto titulo="Por vendedor" dados={porVendedor} />
+        <TabelaDesconto titulo="Por departamento" dados={porDepartamento} />
+      </div>
+    </div>
+  )
+}
+
+function TabelaDesconto({ titulo, dados }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{titulo}</p>
+      {dados.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem vendas ganhas esse mês ainda.</p>}
+      {dados.map(d => (
+        <div key={d.nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid #f2f2f2' }}>
+          <span>{d.nome} ({d.vendas} venda{d.vendas !== 1 ? 's' : ''})</span>
+          <span style={{ fontWeight: 600, color: '#a32d2d' }}>{formatarMoeda(d.desconto)} ({d.percentual.toFixed(1)}%)</span>
+        </div>
+      ))}
     </div>
   )
 }

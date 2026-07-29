@@ -33,7 +33,7 @@ export async function listarNegocios() {
       titulo, produto_servico, descricao_necessidade, origem, probabilidade_fechamento, previsao_fechamento,
       urgencia, numero_orcamento, data_orcamento, validade_proposta, observacoes,
       proxima_acao, proxima_acao_data, proxima_acao_canal,
-      concorrente, data_perda, pode_reativar, data_sugerida_reativacao, motivo_perda_id,
+      concorrente, data_perda, pode_reativar, data_sugerida_reativacao, motivo_perda_id, desconto_valor,
       atualizado_em, criado_em,
       cliente:clientes ( id, razao_social, nome_fantasia, cnpj, cidade, telefone_whats ),
       departamento:departamentos ( id, nome ),
@@ -212,8 +212,8 @@ export async function marcarPerdida(negocioId, { motivo_perda_id, observacoes, c
   })
 }
 
-export async function marcarGanha(negocioId, { valor_final }) {
-  return moverEtapa(negocioId, 'ganha', { valor_final })
+export async function marcarGanha(negocioId, { valor_final, desconto_valor }) {
+  return moverEtapa(negocioId, 'ganha', { valor_final, desconto_valor })
 }
 
 export async function criarPassagemBastao(dados) {

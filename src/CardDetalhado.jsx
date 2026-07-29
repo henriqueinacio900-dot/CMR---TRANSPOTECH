@@ -316,7 +316,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [motivoId, setMotivoId] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [concorrente, setConcorrente] = useState('')
-  const [valorFinal, setValorFinal] = useState(negocio.valor_cotacao || '')
+  const [descontoValor, setDescontoValor] = useState('')
   const [proximaAcaoNova, setProximaAcaoNova] = useState('')
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -374,10 +374,11 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarGanha() {
-    if (!valorFinal) return
     setSalvando(true)
     try {
-      await marcarGanha(negocio.id, { valor_final: Number(valorFinal) })
+      const desconto = Number(descontoValor || 0)
+      const valorFinal = (negocio.valor_cotacao || 0) - desconto
+      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto })
       onAtualizado()
       onFechar()
     } finally {
@@ -436,12 +437,16 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
       {mostrarGanha && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha</p>
-          <input type="number" placeholder="Valor final (R$) *" value={valorFinal} onChange={e => setValorFinal(e.target.value)} style={inputStyle} />
+          <p style={{ fontSize: 12, color: '#777', margin: 0 }}>Valor da cotação: {formatarMoeda(negocio.valor_cotacao)}</p>
+          <input type="number" placeholder="Desconto concedido (R$)" value={descontoValor} onChange={e => setDescontoValor(e.target.value)} style={inputStyle} />
+          <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#3b6d11' }}>
+            Valor final: {formatarMoeda((negocio.valor_cotacao || 0) - Number(descontoValor || 0))}
+          </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button
               onClick={confirmarGanha}
-              disabled={salvando || !valorFinal}
+              disabled={salvando}
               style={{ ...botaoPequeno, background: '#3b6d11' }}
             >
               Confirmar venda

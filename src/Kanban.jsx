@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon } from 'lucide-react'
 import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
-import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci } from './constants'
+import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
@@ -13,7 +13,6 @@ import Reativacao from './Reativacao.jsx'
 import Sidebar from './Sidebar.jsx'
 import Clientes from './Clientes.jsx'
 import Atividades from './Atividades.jsx'
-import PassagemBastao from './PassagemBastao.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -154,7 +153,6 @@ export default function Kanban() {
         {visao === 'clientes' && <Clientes />}
         {visao === 'atividades' && <Atividades />}
         {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
-        {visao === 'passagem_bastao' && <PassagemBastao />}
         {visao === 'relatorios' && <Dashboard />}
       </div>
 
@@ -215,10 +213,15 @@ const CORES_ROSCA = { quente: '#C1440E', morno: '#C68A1E', frio: '#2F6FB0' }
 const LABEL_ROSCA = { quente: 'Quente', morno: 'Morno', frio: 'Frio' }
 
 function GraficoTemperatura({ filtrados }) {
+  const [tempAberta, setTempAberta] = useState(null)
   const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao_decisao')
   const dados = ['quente', 'morno', 'frio']
-    .map(t => ({ nome: LABEL_ROSCA[t], valor: emNegociacao.filter(n => n.temperatura === t).length, chave: t }))
-    .filter(d => d.valor > 0)
+    .map(t => ({
+      nome: LABEL_ROSCA[t], chave: t,
+      valor: emNegociacao.filter(n => n.temperatura === t).reduce((s, n) => s + (n.valor_cotacao || 0), 0),
+      qtd: emNegociacao.filter(n => n.temperatura === t).length,
+    }))
+    .filter(d => d.qtd > 0)
 
   return (
     <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px', maxWidth: 340 }}>
@@ -226,16 +229,116 @@ function GraficoTemperatura({ filtrados }) {
       {dados.length === 0 ? (
         <p style={{ fontSize: 12, color: '#999' }}>Nenhum negócio em negociação agora.</p>
       ) : (
-        <ResponsiveContainer width="100%" height={180}>
-          <PieChart>
-            <Pie data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}>
-              {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+        <>
+          <ResponsiveContainer width="100%" height={180}>
+            <PieChart>
+              <Pie
+                data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}
+                onClick={d => setTempAberta(d.chave)}
+                style={{ cursor: 'pointer' }}
+              >
+                {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
+              </Pie>
+              <Tooltip formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+          <p style={{ fontSize: 11, color: '#999', margin: '4px 0 0', textAlign: 'center' }}>Clique numa fatia pra ver a lista</p>
+        </>
       )}
+
+      {tempAberta && (
+        <ModalListaTemperatura
+          temperatura={tempAberta}
+          negocios={emNegociacao.filter(n => n.temperatura === tempAberta)}
+          onFechar={() => setTempAberta(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalListaTemperatura({ temperatura, negocios, onFechar }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16,
+    }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: 560, maxWidth: '100%', maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: CORES_ROSCA[temperatura] }}>
+            Negócios — temperatura {LABEL_ROSCA[temperatura]}
+          </p>
+          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: '#777', borderBottom: '1px solid #eee' }}>
+              <th style={{ padding: '6px 4px' }}>Cliente</th>
+              <th style={{ padding: '6px 4px' }}>Vendedor</th>
+              <th style={{ padding: '6px 4px' }}>Dias aberto</th>
+              <th style={{ padding: '6px 4px' }}>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {negocios.map(n => {
+              const dias = n.atualizado_em ? Math.floor((Date.now() - new Date(n.atualizado_em)) / 86400000) : 0
+              return (
+                <tr key={n.id} style={{ borderBottom: '1px solid #f2f2f2' }}>
+                  <td style={{ padding: '6px 4px', fontWeight: 600 }}>{n.cliente?.razao_social}</td>
+                  <td style={{ padding: '6px 4px' }}>{n.consultor?.nome}</td>
+                  <td style={{ padding: '6px 4px' }}>{dias}</td>
+                  <td style={{ padding: '6px 4px' }}>{formatarMoeda(n.valor_cotacao)}</td>
+                </tr>
+              )
+            })}
+            {negocios.length === 0 && (
+              <tr><td colSpan={4} style={{ padding: 8, color: '#999' }}>Nenhum negócio.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function RankingsVendedores({ filtrados }) {
+  const mapa = {}
+  filtrados.forEach(n => {
+    const nome = n.consultor?.nome || 'Sem consultor'
+    if (!mapa[nome]) mapa[nome] = { ganho: 0, prospeccoes: 0, ganhos: 0, perdidos: 0 }
+    mapa[nome].prospeccoes++
+    if (n.etapa === 'ganha') { mapa[nome].ganhos++; mapa[nome].ganho += (n.valor_final || n.valor_cotacao || 0) }
+    if (n.etapa === 'perdida') mapa[nome].perdidos++
+  })
+  const lista = Object.entries(mapa).map(([nome, v]) => ({
+    nome, ...v, conversao: (v.ganhos + v.perdidos) > 0 ? v.ganhos / (v.ganhos + v.perdidos) * 100 : 0,
+  }))
+
+  const porGanho = [...lista].sort((a, b) => b.ganho - a.ganho).slice(0, 5)
+  const porProspeccao = [...lista].sort((a, b) => b.prospeccoes - a.prospeccoes).slice(0, 5)
+  const porConversao = [...lista].sort((a, b) => b.conversao - a.conversao).slice(0, 5)
+
+  return (
+    <div style={{ display: 'flex', gap: 12, flex: '2 0 400px', flexWrap: 'wrap' }}>
+      <MiniRanking titulo="Top 5 · Ganho (R$)" lista={porGanho} render={l => formatarMoeda(l.ganho)} />
+      <MiniRanking titulo="Top 5 · Prospecção" lista={porProspeccao} render={l => l.prospeccoes} />
+      <MiniRanking titulo="Top 5 · Conversão" lista={porConversao} render={l => `${l.conversao.toFixed(0)}%`} />
+    </div>
+  )
+}
+
+function MiniRanking({ titulo, lista, render }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, flex: '1 0 180px' }}>
+      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>{titulo}</p>
+      {lista.length === 0 && <p style={{ fontSize: 11, color: '#999' }}>Sem dados.</p>}
+      {lista.map((l, i) => (
+        <div key={l.nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
+          <span>{i + 1}. {l.nome}</span>
+          <span style={{ fontWeight: 600 }}>{render(l)}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -256,8 +359,7 @@ function VisaoGeral(props) {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiCard icone={BarChart3} label="Pipeline total" valor={formatarMoeda(metrics.pipelineTotal)} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard icone={Trophy} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} corIcone="#3b6d11" />
         <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
         <KpiCard icone={Scale} label="Ticket médio (TKM)" valor={formatarMoeda(metrics.ticketMedio)} />
@@ -266,6 +368,7 @@ function VisaoGeral(props) {
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <GraficoTemperatura filtrados={filtrados} />
+        <RankingsVendedores filtrados={filtrados} />
       </div>
 
       <FiltrosLinha {...props} />
@@ -282,7 +385,7 @@ function VisaoGeral(props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginTop: 20 }}>
         <ResumoCard titulo="Follow-ups de hoje" valor={followupsHoje} />
         <ResumoCard titulo="Negócios parados" valor={negociosParados.length} sub={formatarMoeda(valorParados)} />
-        <ResumoCard titulo="Passagens pendentes" valor="Ver aba" sub="Passagem de bastão" />
+        <ResumoCard titulo="Clientes Ouro/Prata/Bronze" valor={filtrados.filter(n => classificarValorCliente(n.valor_cotacao)).length} sub="Ver medalha nos cards" />
       </div>
     </div>
   )
@@ -461,6 +564,8 @@ function CardNegocio({ negocio, onClick }) {
   const pci = notaPci !== undefined ? classificarPci(notaPci) : null
   const atrasado = negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
   const corBorda = negocio.urgencia === 'alta' ? '#F77E01' : (pci ? pci.cor : '#ddd')
+  const classificacao = classificarValorCliente(negocio.valor_cotacao || negocio.valor_final)
+  const diasAberto = negocio.criado_em ? Math.floor((Date.now() - new Date(negocio.criado_em)) / 86400000) : 0
 
   return (
     <div
@@ -476,7 +581,7 @@ function CardNegocio({ negocio, onClick }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: temp ? temp.titulo : '#222' }}>
-          {negocio.cliente?.razao_social}
+          {classificacao ? `${classificacao.medalha} ` : ''}{negocio.cliente?.razao_social}
         </p>
         {pci && (
           <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor, borderRadius: 4, padding: '1px 5px' }}>
@@ -490,7 +595,16 @@ function CardNegocio({ negocio, onClick }) {
       <p style={{ fontSize: 13, margin: '4px 0 0', fontWeight: 600, color: temp ? temp.titulo : '#222' }}>
         {formatarMoeda(negocio.valor_cotacao)}
       </p>
-      <p style={{ fontSize: 11, margin: '4px 0 0', color: temp ? temp.sub : '#777' }}>{negocio.consultor?.nome}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+        <p style={{ fontSize: 11, margin: 0, color: temp ? temp.sub : '#777' }}>{negocio.consultor?.nome}</p>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+          background: diasAberto > 15 ? '#fcebeb' : '#f1efe8',
+          color: diasAberto > 15 ? '#a32d2d' : '#666',
+        }}>
+          {diasAberto}d
+        </span>
+      </div>
       {negocio.proxima_acao_data && (
         <p style={{ fontSize: 11, margin: '4px 0 0', color: atrasado ? '#c0392b' : (temp ? temp.sub : '#777'), fontWeight: atrasado ? 700 : 400 }}>
           {atrasado ? '⚠ ' : ''}Próx: {new Date(negocio.proxima_acao_data).toLocaleDateString('pt-BR')}

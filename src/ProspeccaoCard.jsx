@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { registrarInteracao, gerarOrcamento, moverParaRetornoFuturo, descartarNegocio, daquiADias } from './api'
+import { registrarInteracao, gerarOrcamento, moverParaRetornoFuturo, descartarNegocio, moverEtapa, daquiADias } from './api'
 import { CORES_TEMPERATURA, formatarMoeda } from './constants'
 
 const TIPOS = [
@@ -23,6 +23,17 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
       await registrarInteracao({ negocio_id: negocio.id, tipo })
       setTipoContato(tipo)
       setEtapaLocal('escolher_resultado')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function avancarContatoRealizado() {
+    setSalvando(true)
+    try {
+      await registrarInteracao({ negocio_id: negocio.id, tipo: tipoContato, resultado: 'contato_realizado' })
+      await moverEtapa(negocio.id, 'contato_realizado')
+      onAtualizado()
     } finally {
       setSalvando(false)
     }
@@ -131,7 +142,8 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
 
         {etapaLocal === 'escolher_resultado' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-            <button disabled={salvando} style={btnPequeno} onClick={() => setEtapaLocal('orcamento')}>Gerar orçamento</button>
+            <button disabled={salvando} style={btnPequeno} onClick={avancarContatoRealizado}>Contato realizado (seguir depois)</button>
+            <button disabled={salvando} style={btnPequeno} onClick={() => setEtapaLocal('orcamento')}>Gerar orçamento agora</button>
             <button disabled={salvando} style={btnPequeno} onClick={semInteresse}>Não tenho interesse</button>
             <button disabled={salvando} style={btnPequeno} onClick={temFornecedor}>Já tem fornecedor</button>
             <button disabled={salvando} style={btnPequeno} onClick={() => setEtapaLocal('ligar_futuro')}>Ligar no futuro</button>

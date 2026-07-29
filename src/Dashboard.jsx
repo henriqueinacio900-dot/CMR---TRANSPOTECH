@@ -133,6 +133,10 @@ export default function Dashboard() {
         <GraficoProdutividade negocios={negocios} metas={metas} />
       </Secao>
 
+      <Secao titulo="Projeção de metas por vendedor">
+        <QuadroProjecao negocios={negocios} consultores={consultores} metas={metas} />
+      </Secao>
+
       <Secao titulo="Rankings Top 5">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
           <RankingTop5 titulo="Prospecção" negocios={negocios} etapa="prospeccao" />
@@ -230,6 +234,84 @@ function GraficoProdutividade({ negocios, metas }) {
         <Line type="monotone" dataKey="faturamento" name="Faturamento" stroke="#F77E01" strokeWidth={2} dot={false} />
       </LineChart>
     </RRC>
+  )
+}
+
+function QuadroProjecao({ negocios, consultores, metas }) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const diasPassados = agora.getDate()
+  const diasTotais = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate()
+
+  const linhas = consultores.map(c => {
+    const meusNegocios = negocios.filter(n => n.consultor?.id === c.id)
+    const prospeccoes = meusNegocios.length
+    const orcamentosGerados = meusNegocios.filter(n => n.data_orcamento).length
+    const ganhos = meusNegocios.filter(n => n.etapa === 'ganha')
+    const perdidos = meusNegocios.filter(n => n.etapa === 'perdida')
+    const tkm = ganhos.length > 0 ? ganhos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / ganhos.length : 0
+    const conversao = (ganhos.length + perdidos.length) > 0 ? ganhos.length / (ganhos.length + perdidos.length) * 100 : 0
+
+    const meta = metas.find(m => m.consultor_id === c.id)?.valor_meta || 0
+    const ganhosMes = ganhos.filter(n => new Date(n.atualizado_em) >= inicioMes)
+    const ganhoAtual = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+    const faltante = Math.max(meta - ganhoAtual, 0)
+    const negociosAFechar = tkm > 0 ? faltante / tkm : 0
+
+    const ritmoDiario = diasPassados > 0 ? ganhoAtual / diasPassados : 0
+    const projecaoFimMes = ritmoDiario * diasTotais
+    const vaiBater = meta > 0 ? projecaoFimMes >= meta : null
+
+    return { nome: c.nome, prospeccoes, orcamentosGerados, tkm, conversao, meta, ganhoAtual, faltante, negociosAFechar, projecaoFimMes, vaiBater }
+  })
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 800 }}>
+        <thead>
+          <tr style={{ textAlign: 'left', color: '#777', borderBottom: '1px solid #eee' }}>
+            <th style={{ padding: '6px 8px' }}>Vendedor</th>
+            <th style={{ padding: '6px 8px' }}>Prospecções</th>
+            <th style={{ padding: '6px 8px' }}>Orçamentos</th>
+            <th style={{ padding: '6px 8px' }}>TKM</th>
+            <th style={{ padding: '6px 8px' }}>Conversão</th>
+            <th style={{ padding: '6px 8px' }}>Meta</th>
+            <th style={{ padding: '6px 8px' }}>Ganho no mês</th>
+            <th style={{ padding: '6px 8px' }}>Negócios a fechar</th>
+            <th style={{ padding: '6px 8px' }}>Projeção fim do mês</th>
+            <th style={{ padding: '6px 8px' }}>Vai bater?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map(l => (
+            <tr key={l.nome} style={{ borderBottom: '1px solid #f2f2f2' }}>
+              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{l.nome}</td>
+              <td style={{ padding: '6px 8px' }}>{l.prospeccoes}</td>
+              <td style={{ padding: '6px 8px' }}>{l.orcamentosGerados}</td>
+              <td style={{ padding: '6px 8px' }}>{formatarMoeda(l.tkm)}</td>
+              <td style={{ padding: '6px 8px' }}>{l.conversao.toFixed(0)}%</td>
+              <td style={{ padding: '6px 8px' }}>{l.meta ? formatarMoeda(l.meta) : '-'}</td>
+              <td style={{ padding: '6px 8px' }}>{formatarMoeda(l.ganhoAtual)}</td>
+              <td style={{ padding: '6px 8px' }}>{l.meta ? l.negociosAFechar.toFixed(1) : '-'}</td>
+              <td style={{ padding: '6px 8px' }}>{l.meta ? formatarMoeda(l.projecaoFimMes) : '-'}</td>
+              <td style={{ padding: '6px 8px' }}>
+                {l.vaiBater === null ? '-' : (
+                  <span style={{ fontWeight: 700, color: l.vaiBater ? '#3b6d11' : '#a32d2d' }}>
+                    {l.vaiBater ? '✓ Sim' : '✗ Não'}
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+          {linhas.length === 0 && (
+            <tr><td colSpan={10} style={{ padding: 8, color: '#999' }}>Nenhum consultor cadastrado.</td></tr>
+          )}
+        </tbody>
+      </table>
+      <p style={{ fontSize: 11, color: '#999', marginTop: 8 }}>
+        Projeção calculada pelo ritmo médio de faturamento até hoje ({diasPassados} de {diasTotais} dias do mês), projetado pro mês inteiro. Cadastre a meta de cada um acima pra habilitar.
+      </p>
+    </div>
   )
 }
 

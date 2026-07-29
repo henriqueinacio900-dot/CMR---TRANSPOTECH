@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
   listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha,
-  recalcularProximoPassoOrcamento, criarPassagemBastao, buscarPassagemBastao,
-  listarDepartamentos, listarConsultores,
+  recalcularProximoPassoOrcamento,
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
@@ -15,7 +14,7 @@ const ABAS_BASE = ['Resumo', 'Cliente e contatos', 'Oportunidade', 'PCI', 'Ativi
 
 export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
   const [aba, setAba] = useState('Resumo')
-  const abas = negocio.etapa === 'ganha' ? [...ABAS_BASE, 'Passagem de bastão'] : ABAS_BASE
+  const abas = ABAS_BASE
 
   return (
     <div style={{
@@ -59,7 +58,6 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
           {aba === 'PCI' && <PciForm negocioId={negocio.id} />}
           {aba === 'Atividades' && <AbaAtividades negocio={negocio} onAtualizado={onAtualizado} />}
           {aba === 'Histórico' && <AbaHistorico negocio={negocio} />}
-          {aba === 'Passagem de bastão' && <AbaPassagemBastao negocio={negocio} />}
         </div>
 
         <RodapeEtapa negocio={negocio} onAtualizado={onAtualizado} onFechar={onFechar} />
@@ -284,35 +282,6 @@ function AbaAtividades({ negocio, onAtualizado }) {
   )
 }
 
-function AbaPassagemBastao({ negocio }) {
-  const [passagem, setPassagem] = useState(null)
-  const [carregando, setCarregando] = useState(true)
-
-  useEffect(() => {
-    buscarPassagemBastao(negocio.id).then(p => { setPassagem(p); setCarregando(false) })
-  }, [negocio.id])
-
-  if (carregando) return <p>Carregando...</p>
-  if (!passagem) return <p style={{ color: '#999', fontSize: 13 }}>Nenhuma passagem de bastão registrada.</p>
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-      <Linha label="Status" valor={passagem.status} />
-      <Linha label="Produto/serviço" valor={passagem.produto_servico} />
-      <Linha label="Escopo vendido" valor={passagem.escopo_vendido} />
-      <Linha label="Valor final" valor={formatarMoeda(passagem.valor_final)} />
-      <Linha label="Número do pedido" valor={passagem.numero_pedido} />
-      <Linha label="Data da aprovação" valor={passagem.data_aprovacao} />
-      <Linha label="Local de atendimento" valor={passagem.local_atendimento} />
-      <Linha label="Prazo prometido" valor={passagem.prazo_prometido} />
-      <Linha label="Condições comerciais" valor={passagem.condicoes_comerciais} />
-      <Linha label="Condições especiais" valor={passagem.condicoes_especiais} />
-      <Linha label="Observações do vendedor" valor={passagem.observacoes_vendedor} />
-      <Linha label="Riscos / pontos de atenção" valor={passagem.riscos} />
-    </div>
-  )
-}
-
 function AbaHistorico({ negocio }) {
   const [historico, setHistorico] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -352,32 +321,9 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
 
-  // Passagem de bastão (obrigatória ao marcar Ganha)
-  const [contatoNome, setContatoNome] = useState('')
-  const [escopoVendido, setEscopoVendido] = useState('')
-  const [numeroPedido, setNumeroPedido] = useState('')
-  const [dataAprovacao, setDataAprovacao] = useState(new Date().toISOString().slice(0, 10))
-  const [localAtendimento, setLocalAtendimento] = useState('')
-  const [prazoPrometido, setPrazoPrometido] = useState('')
-  const [condicoesComerciais, setCondicoesComerciais] = useState('')
-  const [condicoesEspeciais, setCondicoesEspeciais] = useState('')
-  const [departamentoDestinoId, setDepartamentoDestinoId] = useState('')
-  const [responsavelOperacionalId, setResponsavelOperacionalId] = useState('')
-  const [observacoesVendedor, setObservacoesVendedor] = useState('')
-  const [riscos, setRiscos] = useState('')
-  const [departamentos, setDepartamentos] = useState([])
-  const [consultoresOperacionais, setConsultoresOperacionais] = useState([])
-
   useEffect(() => {
     if (mostrarPerdida) listarMotivosPerda().then(setMotivos)
   }, [mostrarPerdida])
-
-  useEffect(() => {
-    if (mostrarGanha) {
-      listarDepartamentos().then(setDepartamentos)
-      listarConsultores().then(setConsultoresOperacionais)
-    }
-  }, [mostrarGanha])
 
   async function aplicarMudanca() {
     if (novaEtapa === negocio.etapa) return
@@ -428,27 +374,10 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarGanha() {
-    if (!valorFinal || !departamentoDestinoId || !responsavelOperacionalId) return
+    if (!valorFinal) return
     setSalvando(true)
     try {
       await marcarGanha(negocio.id, { valor_final: Number(valorFinal) })
-      await criarPassagemBastao({
-        negocio_id: negocio.id,
-        cliente_id: negocio.cliente?.id,
-        produto_servico: negocio.produto_servico || null,
-        escopo_vendido: escopoVendido || null,
-        valor_final: Number(valorFinal),
-        numero_pedido: numeroPedido || null,
-        data_aprovacao: dataAprovacao,
-        local_atendimento: localAtendimento || null,
-        prazo_prometido: prazoPrometido || null,
-        condicoes_comerciais: condicoesComerciais || null,
-        condicoes_especiais: condicoesEspeciais || null,
-        departamento_destino_id: departamentoDestinoId,
-        responsavel_operacional_id: responsavelOperacionalId,
-        observacoes_vendedor: observacoesVendedor || null,
-        riscos: riscos || null,
-      })
       onAtualizado()
       onFechar()
     } finally {
@@ -505,34 +434,17 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
       )}
 
       {mostrarGanha && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
-          <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha + passagem de bastão</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha</p>
           <input type="number" placeholder="Valor final (R$) *" value={valorFinal} onChange={e => setValorFinal(e.target.value)} style={inputStyle} />
-          <input placeholder="Escopo vendido" value={escopoVendido} onChange={e => setEscopoVendido(e.target.value)} style={inputStyle} />
-          <input placeholder="Número do pedido" value={numeroPedido} onChange={e => setNumeroPedido(e.target.value)} style={inputStyle} />
-          <input type="date" placeholder="Data da aprovação" value={dataAprovacao} onChange={e => setDataAprovacao(e.target.value)} style={inputStyle} />
-          <input placeholder="Local de atendimento/entrega" value={localAtendimento} onChange={e => setLocalAtendimento(e.target.value)} style={inputStyle} />
-          <input placeholder="Prazo prometido (ex: 10 dias, 15/08)" value={prazoPrometido} onChange={e => setPrazoPrometido(e.target.value)} style={inputStyle} />
-          <input placeholder="Condições comerciais" value={condicoesComerciais} onChange={e => setCondicoesComerciais(e.target.value)} style={inputStyle} />
-          <input placeholder="Condições especiais" value={condicoesEspeciais} onChange={e => setCondicoesEspeciais(e.target.value)} style={inputStyle} />
-          <select value={departamentoDestinoId} onChange={e => setDepartamentoDestinoId(e.target.value)} style={inputStyle}>
-            <option value="">Departamento de destino *</option>
-            {departamentos.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
-          </select>
-          <select value={responsavelOperacionalId} onChange={e => setResponsavelOperacionalId(e.target.value)} style={inputStyle}>
-            <option value="">Responsável operacional *</option>
-            {consultoresOperacionais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-          <textarea placeholder="Observações do vendedor" rows={2} value={observacoesVendedor} onChange={e => setObservacoesVendedor(e.target.value)} style={inputStyle} />
-          <textarea placeholder="Riscos / pontos de atenção" rows={2} value={riscos} onChange={e => setRiscos(e.target.value)} style={inputStyle} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button
               onClick={confirmarGanha}
-              disabled={salvando || !valorFinal || !departamentoDestinoId || !responsavelOperacionalId}
+              disabled={salvando || !valorFinal}
               style={{ ...botaoPequeno, background: '#3b6d11' }}
             >
-              Confirmar venda e enviar pra operação
+              Confirmar venda
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, UserCheck, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3 } from 'lucide-react'
 
 const ITENS = [
   { key: 'visao_geral', label: 'Visão geral', icone: LayoutDashboard },
@@ -6,7 +6,6 @@ const ITENS = [
   { key: 'clientes', label: 'Clientes', icone: Users },
   { key: 'atividades', label: 'Atividades', icone: CalendarClock },
   { key: 'reativacao', label: 'Reativação', icone: RefreshCw },
-  { key: 'passagem_bastao', label: 'Passagem de bastão', icone: UserCheck },
   { key: 'relatorios', label: 'Relatórios', icone: BarChart3 },
 ]
 

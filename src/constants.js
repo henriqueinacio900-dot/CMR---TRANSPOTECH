@@ -154,6 +154,14 @@ export const PERGUNTAS_PCI = [
   },
 ]
 
+export function classificarValorCliente(valor) {
+  const v = valor || 0
+  if (v >= 100000) return { medalha: '🥇', label: 'Ouro' }
+  if (v >= 70000) return { medalha: '🥈', label: 'Prata' }
+  if (v >= 30000) return { medalha: '🥉', label: 'Bronze' }
+  return null
+}
+
 export function classificarPci(notaTotal) {
   if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
   if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }

@@ -157,6 +157,7 @@ function AbaCliente({ negocio }) {
 
 function AbaOportunidade({ negocio, onAtualizado }) {
   const [campos, setCampos] = useState({
+    valor_cotacao: negocio.valor_cotacao || '',
     produto_servico: negocio.produto_servico || '',
     origem: negocio.origem || '',
     urgencia: negocio.urgencia || 'media',
@@ -175,6 +176,7 @@ function AbaOportunidade({ negocio, onAtualizado }) {
       await atualizarNegocio(negocio.id, {
         ...campos,
         probabilidade_fechamento: campos.probabilidade_fechamento ? Number(campos.probabilidade_fechamento) : null,
+        valor_cotacao: campos.valor_cotacao ? Number(campos.valor_cotacao) : null,
         proxima_acao_data: campos.proxima_acao_data || null,
       })
       onAtualizado()
@@ -185,6 +187,9 @@ function AbaOportunidade({ negocio, onAtualizado }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+      <Campo label="Valor da cotação (R$)">
+        <input type="number" value={campos.valor_cotacao} onChange={e => setCampos({ ...campos, valor_cotacao: e.target.value })} style={inputStyle} />
+      </Campo>
       <Campo label="Produto ou serviço">
         <input value={campos.produto_servico} onChange={e => setCampos({ ...campos, produto_servico: e.target.value })} style={inputStyle} />
       </Campo>

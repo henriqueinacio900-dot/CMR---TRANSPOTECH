@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { criarCliente, criarContato, criarNegocio, buscarClientesDuplicados } from './api'
-import { CORES_MARCA, ORIGENS, URGENCIAS, PROXIMAS_ACOES, PAPEIS_CONTATO } from './constants'
+import { CORES_MARCA, ORIGENS, URGENCIAS, PROXIMAS_ACOES, PAPEIS_CONTATO, formatarTelefoneInput } from './constants'
+
+const ETAPAS_INICIAIS = [
+  { key: 'prospeccao', label: 'Prospecção (padrão)' },
+  { key: 'orcamento_enviado', label: 'Orçamento enviado' },
+  { key: 'negociacao_decisao', label: 'Negociação/decisão' },
+]
 
 export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   // Cliente
@@ -21,6 +27,10 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [contatoPapel, setContatoPapel] = useState('')
 
   // Negócio
+  const [emAndamento, setEmAndamento] = useState(false)
+  const [etapaInicial, setEtapaInicial] = useState('prospeccao')
+  const [valorCotacao, setValorCotacao] = useState('')
+  const [temperatura, setTemperatura] = useState('morno')
   const [produtoServico, setProdutoServico] = useState('')
   const [origem, setOrigem] = useState('')
   const [urgencia, setUrgencia] = useState('media')
@@ -78,10 +88,14 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
       await criarNegocio({
         cliente_id: cliente.id,
         departamento_id: departamentoId,
+        etapa: etapaInicial,
         titulo: `${razaoSocial}${produtoServico ? ' - ' + produtoServico : ''}`,
         produto_servico: produtoServico || null,
         origem: origem || null,
         urgencia,
+        valor_cotacao: valorCotacao ? Number(valorCotacao) : null,
+        temperatura: etapaInicial === 'negociacao_decisao' ? temperatura : null,
+        data_orcamento: etapaInicial !== 'prospeccao' ? new Date().toISOString().slice(0, 10) : null,
         proxima_acao: proximaAcao || null,
         proxima_acao_data: proximaAcaoData || null,
       })
@@ -104,7 +118,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
         background: '#fff', borderRadius: 12, padding: 24, width: 460, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
       }}>
-        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>Novo negócio</h2>
+        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>Nova oportunidade</h2>
 
         <Secao titulo="Dados do cliente">
           <Campo label="Razão social / Nome do cliente">
@@ -117,7 +131,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
             <input value={cnpj} onChange={e => setCnpj(e.target.value)} style={inputStyle} />
           </Campo>
           <Campo label="Telefone / WhatsApp">
-            <input value={telefone} onChange={e => setTelefone(e.target.value)} style={inputStyle} />
+            <input value={telefone} onChange={e => setTelefone(formatarTelefoneInput(e.target.value))} style={inputStyle} />
           </Campo>
           <div style={{ display: 'flex', gap: 8 }}>
             <Campo label="Cidade" style={{ flex: 2 }}>
@@ -170,7 +184,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
             </Campo>
           </div>
           <Campo label="Telefone (se diferente do acima)">
-            <input value={contatoTelefone} onChange={e => setContatoTelefone(e.target.value)} style={inputStyle} />
+            <input value={contatoTelefone} onChange={e => setContatoTelefone(formatarTelefoneInput(e.target.value))} style={inputStyle} />
           </Campo>
           <Campo label="E-mail">
             <input value={contatoEmail} onChange={e => setContatoEmail(e.target.value)} style={inputStyle} />
@@ -178,6 +192,36 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
         </Secao>
 
         <Secao titulo="Dados do negócio">
+          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <input type="checkbox" checked={emAndamento} onChange={e => { setEmAndamento(e.target.checked); if (!e.target.checked) setEtapaInicial('prospeccao') }} />
+            Já é um negócio em andamento (pular etapas / importar negócio antigo)
+          </label>
+
+          {emAndamento && (
+            <Campo label="Etapa inicial">
+              <select value={etapaInicial} onChange={e => setEtapaInicial(e.target.value)} style={inputStyle}>
+                {ETAPAS_INICIAIS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
+              </select>
+            </Campo>
+          )}
+
+          {emAndamento && etapaInicial !== 'prospeccao' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Campo label="Valor da cotação (R$)" style={{ flex: 1 }}>
+                <input type="number" value={valorCotacao} onChange={e => setValorCotacao(e.target.value)} style={inputStyle} />
+              </Campo>
+              {etapaInicial === 'negociacao_decisao' && (
+                <Campo label="Temperatura" style={{ flex: 1 }}>
+                  <select value={temperatura} onChange={e => setTemperatura(e.target.value)} style={inputStyle}>
+                    <option value="frio">Frio</option>
+                    <option value="morno">Morno</option>
+                    <option value="quente">Quente</option>
+                  </select>
+                </Campo>
+              )}
+            </div>
+          )}
+
           <Campo label="Produto ou serviço">
             <input value={produtoServico} onChange={e => setProdutoServico(e.target.value)} style={inputStyle} />
           </Campo>

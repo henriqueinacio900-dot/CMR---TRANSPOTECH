@@ -113,7 +113,7 @@ export default function Kanban() {
                 borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              + Novo negócio
+              + Nova oportunidade
             </button>
           </div>
         </div>

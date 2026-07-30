@@ -52,7 +52,7 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
         </div>
 
         <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
-          {aba === 'Resumo' && <AbaResumo negocio={negocio} />}
+          {aba === 'Resumo' && <AbaResumo negocio={negocio} onAtualizado={onAtualizado} />}
           {aba === 'Cliente e contatos' && <AbaCliente negocio={negocio} />}
           {aba === 'Oportunidade' && <AbaOportunidade negocio={negocio} onAtualizado={onAtualizado} />}
           {aba === 'PCI' && <PciForm negocioId={negocio.id} />}
@@ -66,7 +66,7 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
   )
 }
 
-function AbaResumo({ negocio }) {
+function AbaResumo({ negocio, onAtualizado }) {
   const diasSemMovimentacao = negocio.atualizado_em
     ? Math.floor((Date.now() - new Date(negocio.atualizado_em)) / 86400000)
     : null
@@ -88,12 +88,100 @@ function AbaResumo({ negocio }) {
           ↑ Agendado automaticamente pela sequência de acompanhamento pós-orçamento
         </p>
       )}
+      {negocio.etapa === 'ganha' && (
+        <>
+          <Linha label="Valor final" valor={formatarMoeda(negocio.valor_final)} />
+          <Linha label="Desconto concedido" valor={formatarMoeda(negocio.desconto_valor)} />
+          <EditarGanha negocio={negocio} onAtualizado={onAtualizado} />
+        </>
+      )}
       {negocio.etapa === 'perdida' && (
         <>
           <Linha label="Motivo da perda" valor={negocio.motivo_perda?.descricao} />
           <Linha label="Concorrente" valor={negocio.concorrente} />
+          <Linha label="Observações" valor={negocio.observacoes} />
+          <EditarPerdida negocio={negocio} onAtualizado={onAtualizado} />
         </>
       )}
+    </div>
+  )
+}
+
+function EditarGanha({ negocio, onAtualizado }) {
+  const [editando, setEditando] = useState(false)
+  const [pct, setPct] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      const desconto = (negocio.valor_cotacao || 0) * (Number(pct || 0) / 100)
+      const valorFinal = (negocio.valor_cotacao || 0) - desconto
+      await atualizarNegocio(negocio.id, { valor_final: valorFinal, desconto_valor: desconto })
+      onAtualizado()
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!editando) {
+    return <button onClick={() => setEditando(true)} style={{ ...botaoPequeno, marginTop: 4 }}>✏️ Editar venda</button>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+      <input type="number" placeholder="Novo desconto (%)" value={pct} onChange={e => setPct(e.target.value)} style={inputStyle} />
+      <p style={{ fontSize: 12, margin: 0, color: '#3b6d11' }}>
+        Novo valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(pct || 0) / 100))}
+      </p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setEditando(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+        <button onClick={salvar} disabled={salvando} style={botaoPequeno}>Salvar</button>
+      </div>
+    </div>
+  )
+}
+
+function EditarPerdida({ negocio, onAtualizado }) {
+  const [editando, setEditando] = useState(false)
+  const [motivos, setMotivos] = useState([])
+  const [motivoId, setMotivoId] = useState(negocio.motivo_perda_id || '')
+  const [concorrente, setConcorrente] = useState(negocio.concorrente || '')
+  const [observacoes, setObservacoes] = useState(negocio.observacoes || '')
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    if (editando) listarMotivosPerda().then(setMotivos)
+  }, [editando])
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      await atualizarNegocio(negocio.id, { motivo_perda_id: motivoId || null, concorrente: concorrente || null, observacoes: observacoes || null })
+      onAtualizado()
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!editando) {
+    return <button onClick={() => setEditando(true)} style={{ ...botaoPequeno, marginTop: 4 }}>✏️ Editar motivo da perda</button>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+      <select value={motivoId} onChange={e => setMotivoId(e.target.value)} style={inputStyle}>
+        <option value="">Motivo da perda...</option>
+        {motivos.map(m => <option key={m.id} value={m.id}>{m.descricao}</option>)}
+      </select>
+      <input placeholder="Concorrente" value={concorrente} onChange={e => setConcorrente(e.target.value)} style={inputStyle} />
+      <textarea placeholder="Observação" rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} style={inputStyle} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setEditando(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+        <button onClick={salvar} disabled={salvando} style={botaoPequeno}>Salvar</button>
+      </div>
     </div>
   )
 }
@@ -154,6 +242,8 @@ function AbaCliente({ negocio }) {
 }
 
 function AbaOportunidade({ negocio, onAtualizado }) {
+  const [editandoValor, setEditandoValor] = useState(false)
+  const [novoValor, setNovoValor] = useState(negocio.valor_cotacao || '')
   const [campos, setCampos] = useState({
     produto_servico: negocio.produto_servico || '',
     origem: negocio.origem || '',
@@ -166,6 +256,17 @@ function AbaOportunidade({ negocio, onAtualizado }) {
     observacoes: negocio.observacoes || '',
   })
   const [salvando, setSalvando] = useState(false)
+
+  async function salvarNovoValor() {
+    setSalvando(true)
+    try {
+      await atualizarNegocio(negocio.id, { valor_cotacao: novoValor ? Number(novoValor) : null })
+      onAtualizado()
+      setEditandoValor(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   async function salvar() {
     setSalvando(true)
@@ -184,9 +285,23 @@ function AbaOportunidade({ negocio, onAtualizado }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
-      <Campo label="Valor da cotação (R$) — fixado ao gerar o orçamento">
-        <input type="number" value={negocio.valor_cotacao || ''} disabled style={{ ...inputStyle, background: '#f2f2f2', color: '#666' }} />
-      </Campo>
+      <div>
+        <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>
+          Valor da cotação (R$) — fixado ao gerar o orçamento
+        </label>
+        {!editandoValor ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="number" value={negocio.valor_cotacao || ''} disabled style={{ ...inputStyle, background: '#f2f2f2', color: '#666' }} />
+            <button onClick={() => { setNovoValor(negocio.valor_cotacao || ''); setEditandoValor(true) }} style={botaoPequeno}>✏️</button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="number" value={novoValor} onChange={e => setNovoValor(e.target.value)} style={inputStyle} autoFocus />
+            <button onClick={() => setEditandoValor(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+            <button onClick={salvarNovoValor} disabled={salvando} style={botaoPequeno}>Salvar</button>
+          </div>
+        )}
+      </div>
       <Campo label="Produto ou serviço">
         <input value={campos.produto_servico} onChange={e => setCampos({ ...campos, produto_servico: e.target.value })} style={inputStyle} />
       </Campo>

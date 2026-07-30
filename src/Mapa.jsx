@@ -125,8 +125,9 @@ export default function Mapa() {
                 pathOptions={{ color: '#F77E01', fillColor: '#F77E01', fillOpacity: 0.55, weight: 2 }}
                 eventHandlers={{ click: () => setCidadeSelecionada(c) }}
               >
-                <Tooltip permanent direction="top" offset={[0, -6]} opacity={0.9}>
-                  {c.cidade} — {formatarMoeda(c.ganho)}
+                <Tooltip direction="top" offset={[0, -6]} opacity={0.95}>
+                  <strong>{c.cidade}</strong><br />
+                  {c.total} cliente{c.total !== 1 ? 's' : ''} · {formatarMoeda(c.ganho)}
                 </Tooltip>
               </CircleMarker>
             ))}
@@ -147,11 +148,16 @@ export default function Mapa() {
 
 function ModalClientesCidade({ cidade, onFechar }) {
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16,
-    }}>
-      <div style={{ background: '#fff', borderRadius: 12, width: 480, maxWidth: '100%', maxHeight: '80vh', overflowY: 'auto', padding: 20 }}>
+    <>
+      <div
+        onClick={onFechar}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 60 }}
+      />
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 360, maxWidth: '90vw',
+        background: '#fff', zIndex: 61, boxShadow: '-4px 0 20px rgba(0,0,0,0.15)',
+        padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column',
+      }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>
             {cidade.cidade}{cidade.estado ? ` - ${cidade.estado}` : ''}
@@ -170,6 +176,6 @@ function ModalClientesCidade({ cidade, onFechar }) {
           ))}
         </div>
       </div>
-    </div>
+    </>
   )
 }

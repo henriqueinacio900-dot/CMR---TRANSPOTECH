@@ -92,6 +92,7 @@ function AbaResumo({ negocio, onAtualizado }) {
         <>
           <Linha label="Valor final" valor={formatarMoeda(negocio.valor_final)} />
           <Linha label="Desconto concedido" valor={formatarMoeda(negocio.desconto_valor)} />
+          <Linha label="Status" valor={negocio.status_faturamento === 'faturado' ? 'Faturado' : 'Previsto no mês'} />
           <EditarGanha negocio={negocio} onAtualizado={onAtualizado} />
         </>
       )}
@@ -110,6 +111,7 @@ function AbaResumo({ negocio, onAtualizado }) {
 function EditarGanha({ negocio, onAtualizado }) {
   const [editando, setEditando] = useState(false)
   const [pct, setPct] = useState('')
+  const [status, setStatus] = useState(negocio.status_faturamento || 'previsto')
   const [salvando, setSalvando] = useState(false)
 
   async function salvar() {
@@ -117,7 +119,7 @@ function EditarGanha({ negocio, onAtualizado }) {
     try {
       const desconto = (negocio.valor_cotacao || 0) * (Number(pct || 0) / 100)
       const valorFinal = (negocio.valor_cotacao || 0) - desconto
-      await atualizarNegocio(negocio.id, { valor_final: valorFinal, desconto_valor: desconto })
+      await atualizarNegocio(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: status })
       onAtualizado()
       setEditando(false)
     } finally {
@@ -125,8 +127,34 @@ function EditarGanha({ negocio, onAtualizado }) {
     }
   }
 
+  async function salvarSoStatus(novoStatus) {
+    setSalvando(true)
+    try {
+      await atualizarNegocio(negocio.id, { status_faturamento: novoStatus })
+      onAtualizado()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   if (!editando) {
-    return <button onClick={() => setEditando(true)} style={{ ...botaoPequeno, marginTop: 4 }}>✏️ Editar venda</button>
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: '#777' }}>Status:</span>
+          <select
+            value={negocio.status_faturamento || 'previsto'}
+            onChange={e => salvarSoStatus(e.target.value)}
+            disabled={salvando}
+            style={{ ...inputStyle, width: 'auto', padding: '4px 8px', fontSize: 12 }}
+          >
+            <option value="previsto">Previsto no mês</option>
+            <option value="faturado">Faturado</option>
+          </select>
+        </div>
+        <button onClick={() => setEditando(true)} style={{ ...botaoPequeno, alignSelf: 'flex-start' }}>✏️ Editar venda</button>
+      </div>
+    )
   }
 
   return (
@@ -135,6 +163,10 @@ function EditarGanha({ negocio, onAtualizado }) {
       <p style={{ fontSize: 12, margin: 0, color: '#3b6d11' }}>
         Novo valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(pct || 0) / 100))}
       </p>
+      <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
+        <option value="previsto">Previsto no mês</option>
+        <option value="faturado">Faturado</option>
+      </select>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={() => setEditando(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
         <button onClick={salvar} disabled={salvando} style={botaoPequeno}>Salvar</button>
@@ -434,6 +466,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [observacoes, setObservacoes] = useState('')
   const [concorrente, setConcorrente] = useState('')
   const [descontoPercentual, setDescontoPercentual] = useState('')
+  const [statusFaturamento, setStatusFaturamento] = useState('previsto')
   const [proximaAcaoNova, setProximaAcaoNova] = useState('')
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -496,7 +529,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
       const pct = Number(descontoPercentual || 0)
       const desconto = (negocio.valor_cotacao || 0) * (pct / 100)
       const valorFinal = (negocio.valor_cotacao || 0) - desconto
-      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto })
+      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento })
       onAtualizado()
       onFechar()
     } finally {
@@ -560,6 +593,11 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
           <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#3b6d11' }}>
             Valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(descontoPercentual || 0) / 100))}
           </p>
+          <label style={{ fontSize: 12, color: '#666', display: 'block', marginTop: 4 }}>Esse valor já foi faturado ou ainda é previsão pro mês?</label>
+          <select value={statusFaturamento} onChange={e => setStatusFaturamento(e.target.value)} style={inputStyle}>
+            <option value="previsto">Previsto no mês (aprovado, ainda vai faturar)</option>
+            <option value="faturado">Já faturado</option>
+          </select>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button

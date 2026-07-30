@@ -31,6 +31,8 @@ export default function Kanban() {
   const [visao, setVisao] = useState('visao_geral')
   const [busca, setBusca] = useState('')
   const [metas, setMetas] = useState([])
+  const [periodoChave, setPeriodoChave] = useState('este_mes')
+  const [periodoPersonalizado, setPeriodoPersonalizado] = useState({ de: '', ate: '' })
 
   async function carregar() {
     setCarregando(true)
@@ -62,7 +64,8 @@ export default function Kanban() {
     return lista
   }, [negocios, deptSelecionado, vendedorSelecionado, busca])
 
-  const metrics = useMemo(() => calcularMetricas(filtrados), [filtrados])
+  const periodo = useMemo(() => calcularPeriodo(periodoChave, periodoPersonalizado), [periodoChave, periodoPersonalizado])
+  const metrics = useMemo(() => calcularMetricas(filtrados, periodo), [filtrados, periodo])
 
   if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
 
@@ -132,6 +135,11 @@ export default function Kanban() {
             setVendedorSelecionado={setVendedorSelecionado}
             onAbrir={id => setNegocioSelecionado(id)}
             onAtualizado={carregar}
+            periodo={periodo}
+            periodoChave={periodoChave}
+            setPeriodoChave={setPeriodoChave}
+            periodoPersonalizado={periodoPersonalizado}
+            setPeriodoPersonalizado={setPeriodoPersonalizado}
           />
         )}
 
@@ -175,10 +183,49 @@ export default function Kanban() {
   )
 }
 
-function calcularMetricas(negocios) {
+const OPCOES_PERIODO = [
+  { key: 'este_mes', label: 'Este mês' },
+  { key: 'mes_passado', label: 'Mês passado' },
+  { key: 'ultimos_3_meses', label: 'Últimos 3 meses' },
+  { key: 'este_ano', label: 'Este ano' },
+  { key: 'personalizado', label: 'Personalizado...' },
+]
+
+function calcularPeriodo(chave, personalizado) {
   const agora = new Date()
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const inicioMesAnterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
+  if (chave === 'mes_passado') {
+    const inicio = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
+    const fim = new Date(agora.getFullYear(), agora.getMonth(), 0, 23, 59, 59)
+    return { inicio, fim, rotulo: `Mês passado (${inicio.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })})` }
+  }
+  if (chave === 'ultimos_3_meses') {
+    const inicio = new Date(agora.getFullYear(), agora.getMonth() - 2, 1)
+    const fim = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59)
+    return { inicio, fim, rotulo: 'Últimos 3 meses' }
+  }
+  if (chave === 'este_ano') {
+    const inicio = new Date(agora.getFullYear(), 0, 1)
+    const fim = new Date(agora.getFullYear(), 11, 31, 23, 59, 59)
+    return { inicio, fim, rotulo: `Este ano (${agora.getFullYear()})` }
+  }
+  if (chave === 'personalizado' && personalizado?.de && personalizado?.ate) {
+    const inicio = new Date(personalizado.de + 'T00:00:00')
+    const fim = new Date(personalizado.ate + 'T23:59:59')
+    return { inicio, fim, rotulo: `${inicio.toLocaleDateString('pt-BR')} – ${fim.toLocaleDateString('pt-BR')}` }
+  }
+  // este_mes (padrão)
+  const inicio = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const fim = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59)
+  return { inicio, fim, rotulo: `Este mês (01–${fim.getDate()} ${inicio.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })})` }
+}
+
+function calcularMetricas(negocios, periodo) {
+  const agora = new Date()
+  const inicio = periodo.inicio
+  const fim = periodo.fim
+  const duracaoMs = fim.getTime() - inicio.getTime()
+  const inicioAnterior = new Date(inicio.getTime() - duracaoMs - 1)
+  const fimAnterior = new Date(inicio.getTime() - 1)
 
   const abertos = negocios.filter(n => ETAPAS_ABERTAS.includes(n.etapa))
   const pipelineTotal = abertos.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
@@ -187,13 +234,15 @@ function calcularMetricas(negocios) {
     return s + (n.valor_cotacao || 0) * prob
   }, 0)
 
-  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
-  const ganhosMesAnterior = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMesAnterior && new Date(n.atualizado_em) < inicioMes)
+  const dentro = (data, ini, f) => data && new Date(data) >= ini && new Date(data) <= f
+
+  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && dentro(n.atualizado_em, inicio, fim))
+  const ganhosMesAnterior = negocios.filter(n => n.etapa === 'ganha' && dentro(n.atualizado_em, inicioAnterior, fimAnterior))
   const valorGanhoMes = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const valorGanhoMesAnterior = ganhosMesAnterior.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
 
-  const perdidosMes = negocios.filter(n => n.etapa === 'perdida' && n.data_perda && new Date(n.data_perda) >= inicioMes)
-  const perdidosMesAnterior = negocios.filter(n => n.etapa === 'perdida' && n.data_perda && new Date(n.data_perda) >= inicioMesAnterior && new Date(n.data_perda) < inicioMes)
+  const perdidosMes = negocios.filter(n => n.etapa === 'perdida' && dentro(n.data_perda, inicio, fim))
+  const perdidosMesAnterior = negocios.filter(n => n.etapa === 'perdida' && dentro(n.data_perda, inicioAnterior, fimAnterior))
   const conversaoMes = (ganhosMes.length + perdidosMes.length) > 0 ? ganhosMes.length / (ganhosMes.length + perdidosMes.length) * 100 : 0
   const conversaoMesAnterior = (ganhosMesAnterior.length + perdidosMesAnterior.length) > 0 ? ganhosMesAnterior.length / (ganhosMesAnterior.length + perdidosMesAnterior.length) * 100 : 0
 
@@ -403,7 +452,7 @@ function TopVendedores({ filtrados }) {
 }
 
 function VisaoGeral(props) {
-  const { filtrados, metrics, onAbrir, onAtualizado } = props
+  const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado } = props
   const followupsHoje = filtrados.filter(n => {
     if (!n.proxima_acao_data) return false
     const d = new Date(n.proxima_acao_data)
@@ -416,19 +465,30 @@ function VisaoGeral(props) {
   })
   const valorParados = negociosParados.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
 
-  const agora = new Date()
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0)
-  const rotuloPeriodo = `Este mês (01–${fimMes.getDate()} ${inicioMes.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })})`
-
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#333' }}>Visão geral comercial</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ ...selectStyle, background: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            📅 {rotuloPeriodo}
-          </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={periodoChave} onChange={e => setPeriodoChave(e.target.value)} style={selectStyle}>
+            {OPCOES_PERIODO.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+          {periodoChave === 'personalizado' && (
+            <>
+              <input
+                type="date" value={periodoPersonalizado.de}
+                onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, de: e.target.value })}
+                style={selectStyle}
+              />
+              <span style={{ fontSize: 12, color: '#999' }}>até</span>
+              <input
+                type="date" value={periodoPersonalizado.ate}
+                onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, ate: e.target.value })}
+                style={selectStyle}
+              />
+            </>
+          )}
+
         </div>
       </div>
 

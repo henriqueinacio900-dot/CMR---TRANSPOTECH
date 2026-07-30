@@ -14,6 +14,7 @@ import Sidebar from './Sidebar.jsx'
 import Clientes from './Clientes.jsx'
 import Atividades from './Atividades.jsx'
 import Provisionado from './Provisionado.jsx'
+import Mapa from './Mapa.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -154,6 +155,7 @@ export default function Kanban() {
         {visao === 'clientes' && <Clientes />}
         {visao === 'atividades' && <Atividades />}
         {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
+        {visao === 'mapa' && <Mapa />}
         {visao === 'provisionado' && <Provisionado />}
         {visao === 'relatorios' && <Dashboard />}
       </div>

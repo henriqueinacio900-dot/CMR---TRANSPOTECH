@@ -422,6 +422,19 @@ export async function salvarMetaMensal(consultorId, ano, mes, valorMeta) {
   return data
 }
 
+export async function buscarCoordenadasCache() {
+  const { data, error } = await supabase.from('cidade_coordenadas').select('*')
+  if (error) { console.error(error); return [] }
+  return data
+}
+
+export async function salvarCoordenada({ chave, cidade, estado, latitude, longitude }) {
+  const { error } = await supabase
+    .from('cidade_coordenadas')
+    .upsert({ chave, cidade, estado, latitude, longitude }, { onConflict: 'chave' })
+  if (error) console.error('Erro ao salvar coordenada:', error)
+}
+
 export async function sair() {
   return supabase.auth.signOut()
 }

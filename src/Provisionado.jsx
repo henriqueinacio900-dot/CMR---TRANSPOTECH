@@ -44,7 +44,8 @@ export default function Provisionado() {
     linhas.push([])
     linhas.push(['Orçamentos aprovados fatura no mês'])
     previstos.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
-    linhas.push(['TOTAL PREVISTO MÊS', totalPrevistoMes])
+    linhas.push(['Total previsto (esta lista)', totalPrevisto])
+    linhas.push(['TOTAL PREVISTO MÊS (previsto + faturado)', totalPrevistoMes])
     linhas.push([])
     linhas.push(['Orçamentos em Negociação'])
     negociacao.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_cotacao || 0]))
@@ -67,9 +68,10 @@ export default function Provisionado() {
         <button onClick={exportarExcel} style={botaoExportar}>⬇ Baixar Excel</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         <Card label="Meta" valor={formatarMoeda(meta)} />
         <Card label="Faturado" valor={formatarMoeda(totalFaturado)} cor="#3b6d11" />
+        <Card label="Previsto (aprovado, pendente de faturar)" valor={formatarMoeda(totalPrevisto)} cor="#8a6d1f" />
         <Card label="Previsto + Faturado no mês" valor={formatarMoeda(totalPrevistoMes)} sub={`${percentualMeta.toFixed(0)}% da meta`} />
         <Card label="Saldo para a meta" valor={formatarMoeda(saldoParaMeta)} cor={saldoParaMeta > 0 ? '#a32d2d' : '#3b6d11'} />
       </div>
@@ -79,8 +81,7 @@ export default function Provisionado() {
           titulo="Orçamentos aprovados fatura no mês"
           itens={previstos.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
           total={totalPrevisto}
-          totalLabel="TOTAL PREVISTO MÊS"
-          totalGeral={totalPrevistoMes}
+          totalLabel="Total previsto (esta lista)"
         />
         <Tabela
           titulo="Orçamentos em Negociação"
@@ -97,7 +98,7 @@ export default function Provisionado() {
   )
 }
 
-function Tabela({ titulo, itens, total, totalLabel, totalGeral }) {
+function Tabela({ titulo, itens, total, totalLabel }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
       <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', background: '#F1E9DD', padding: '6px 8px', borderRadius: 6 }}>{titulo}</p>
@@ -112,7 +113,7 @@ function Tabela({ titulo, itens, total, totalLabel, totalGeral }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: '1px solid #ddd' }}>
         <span>{totalLabel}</span>
-        <span>{formatarMoeda(totalGeral !== undefined ? totalGeral : total)}</span>
+        <span>{formatarMoeda(total)}</span>
       </div>
     </div>
   )

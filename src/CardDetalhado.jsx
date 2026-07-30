@@ -155,10 +155,9 @@ function AbaCliente({ negocio }) {
 
 function AbaOportunidade({ negocio, onAtualizado }) {
   const [campos, setCampos] = useState({
-    valor_cotacao: negocio.valor_cotacao || '',
     produto_servico: negocio.produto_servico || '',
     origem: negocio.origem || '',
-    urgencia: negocio.urgencia || 'media',
+    temperatura: negocio.temperatura || '',
     probabilidade_fechamento: negocio.probabilidade_fechamento || '',
     previsao_fechamento: negocio.previsao_fechamento || '',
     numero_orcamento: negocio.numero_orcamento || '',
@@ -173,8 +172,8 @@ function AbaOportunidade({ negocio, onAtualizado }) {
     try {
       await atualizarNegocio(negocio.id, {
         ...campos,
+        temperatura: campos.temperatura || null,
         probabilidade_fechamento: campos.probabilidade_fechamento ? Number(campos.probabilidade_fechamento) : null,
-        valor_cotacao: campos.valor_cotacao ? Number(campos.valor_cotacao) : null,
         proxima_acao_data: campos.proxima_acao_data || null,
       })
       onAtualizado()
@@ -185,8 +184,8 @@ function AbaOportunidade({ negocio, onAtualizado }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
-      <Campo label="Valor da cotação (R$)">
-        <input type="number" value={campos.valor_cotacao} onChange={e => setCampos({ ...campos, valor_cotacao: e.target.value })} style={inputStyle} />
+      <Campo label="Valor da cotação (R$) — fixado ao gerar o orçamento">
+        <input type="number" value={negocio.valor_cotacao || ''} disabled style={{ ...inputStyle, background: '#f2f2f2', color: '#666' }} />
       </Campo>
       <Campo label="Produto ou serviço">
         <input value={campos.produto_servico} onChange={e => setCampos({ ...campos, produto_servico: e.target.value })} style={inputStyle} />
@@ -197,9 +196,12 @@ function AbaOportunidade({ negocio, onAtualizado }) {
           {ORIGENS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
       </Campo>
-      <Campo label="Urgência">
-        <select value={campos.urgencia} onChange={e => setCampos({ ...campos, urgencia: e.target.value })} style={inputStyle}>
-          {URGENCIAS.map(u => <option key={u.key} value={u.key}>{u.label}</option>)}
+      <Campo label="Temperatura">
+        <select value={campos.temperatura} onChange={e => setCampos({ ...campos, temperatura: e.target.value })} style={inputStyle}>
+          <option value="">-</option>
+          <option value="frio">Frio</option>
+          <option value="morno">Morno</option>
+          <option value="quente">Quente</option>
         </select>
       </Campo>
       <Campo label="Probabilidade de fechamento (%)">
@@ -316,7 +318,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [motivoId, setMotivoId] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [concorrente, setConcorrente] = useState('')
-  const [descontoValor, setDescontoValor] = useState('')
+  const [descontoPercentual, setDescontoPercentual] = useState('')
   const [proximaAcaoNova, setProximaAcaoNova] = useState('')
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -376,7 +378,8 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   async function confirmarGanha() {
     setSalvando(true)
     try {
-      const desconto = Number(descontoValor || 0)
+      const pct = Number(descontoPercentual || 0)
+      const desconto = (negocio.valor_cotacao || 0) * (pct / 100)
       const valorFinal = (negocio.valor_cotacao || 0) - desconto
       await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto })
       onAtualizado()
@@ -438,9 +441,9 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha</p>
           <p style={{ fontSize: 12, color: '#777', margin: 0 }}>Valor da cotação: {formatarMoeda(negocio.valor_cotacao)}</p>
-          <input type="number" placeholder="Desconto concedido (R$)" value={descontoValor} onChange={e => setDescontoValor(e.target.value)} style={inputStyle} />
+          <input type="number" placeholder="Desconto concedido (%)" value={descontoPercentual} onChange={e => setDescontoPercentual(e.target.value)} style={inputStyle} />
           <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#3b6d11' }}>
-            Valor final: {formatarMoeda((negocio.valor_cotacao || 0) - Number(descontoValor || 0))}
+            Valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(descontoPercentual || 0) / 100))}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>

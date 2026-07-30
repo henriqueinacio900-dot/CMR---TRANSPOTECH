@@ -5,7 +5,6 @@ import { classificarPci } from './constants'
 const ETAPA_PARA_CONFIG = {
   prospeccao: 'dias_prospeccao_sem_contato',
   contato_realizado: 'dias_contato_sem_atualizacao',
-  oportunidade_identificada: 'dias_oportunidade_sem_orcamento',
   orcamento_enviado: 'dias_orcamento_sem_followup',
   negociacao_decisao: 'dias_negociacao_sem_atualizacao',
 }
@@ -22,7 +21,7 @@ function calcularAlertas(negocios, config) {
   const alertas = []
 
   negocios.forEach(n => {
-    const aberto = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao'].includes(n.etapa)
+    const aberto = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao'].includes(n.etapa)
     if (!aberto) return
 
     if (n.proxima_acao_data && new Date(n.proxima_acao_data) < agora) {

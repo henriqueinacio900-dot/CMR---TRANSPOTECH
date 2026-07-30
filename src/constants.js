@@ -8,11 +8,10 @@ export const CORES_TEMPERATURA = {
   quente: { grad: 'linear-gradient(135deg, #FCEBEB, #F09595)', titulo: '#501313', sub: '#A32D2D' },
 }
 
-// Funil de 7 etapas
+// Funil (Oportunidade identificada removida a pedido)
 export const ETAPAS = [
   { key: 'prospeccao', label: 'Prospecção' },
   { key: 'contato_realizado', label: 'Contato realizado' },
-  { key: 'oportunidade_identificada', label: 'Oportunidade identificada' },
   { key: 'orcamento_enviado', label: 'Orçamento enviado' },
   { key: 'negociacao_decisao', label: 'Negociação/decisão' },
   { key: 'ganha', label: 'Ganha' },

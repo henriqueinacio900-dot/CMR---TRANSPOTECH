@@ -3,11 +3,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Resp
 import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal } from './api'
 import { classificarPci, formatarMoeda } from './constants'
 
-const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
+const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 const ETAPA_PARA_CONFIG = {
   prospeccao: 'dias_prospeccao_sem_contato',
   contato_realizado: 'dias_contato_sem_atualizacao',
-  oportunidade_identificada: 'dias_oportunidade_sem_orcamento',
   orcamento_enviado: 'dias_orcamento_sem_followup',
   negociacao_decisao: 'dias_negociacao_sem_atualizacao',
 }

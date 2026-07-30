@@ -14,7 +14,7 @@ import Sidebar from './Sidebar.jsx'
 import Clientes from './Clientes.jsx'
 import Atividades from './Atividades.jsx'
 
-const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
+const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
@@ -517,7 +517,6 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis }) {
 const ETAPAS_FUNIL_CONVERSAO = [
   { key: 'prospeccao', label: 'Prospecção' },
   { key: 'contato_realizado', label: 'Contato realizado' },
-  { key: 'oportunidade_identificada', label: 'Oportunidade identificada' },
   { key: 'orcamento_enviado', label: 'Orçamento enviado' },
   { key: 'negociacao_decisao', label: 'Negociação/decisão' },
   { key: 'ganha', label: 'Ganha' },

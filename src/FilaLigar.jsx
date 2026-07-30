@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { adiarProximaAcao } from './api'
 import { classificarPci, formatarMoeda } from './constants'
 
-const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'oportunidade_identificada', 'orcamento_enviado', 'negociacao_decisao']
+const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
 function calcularMotivosEPrioridade(n) {
   const agora = new Date()

@@ -226,28 +226,44 @@ function GraficoTemperatura({ filtrados }) {
       qtd: emNegociacao.filter(n => n.temperatura === t).length,
     }))
     .filter(d => d.qtd > 0)
+  const totalNegocios = emNegociacao.length
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px', maxWidth: 340 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>Temperatura em negociação</p>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>Temperatura das negociações</p>
       {dados.length === 0 ? (
         <p style={{ fontSize: 12, color: '#999' }}>Nenhum negócio em negociação agora.</p>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie
-                data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}
-                onClick={d => setTempAberta(d.chave)}
-                style={{ cursor: 'pointer' }}
-              >
-                {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
-              </Pie>
-              <Tooltip formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-          <p style={{ fontSize: 11, color: '#999', margin: '4px 0 0', textAlign: 'center' }}>Clique numa fatia pra ver a lista</p>
+          <div style={{ position: 'relative' }}>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}
+                  onClick={d => setTempAberta(d.chave)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
+                </Pie>
+                <Tooltip formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 30,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+            }}>
+              <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#222' }}>{totalNegocios}</p>
+              <p style={{ fontSize: 11, color: '#999', margin: 0 }}>negócios</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: 11, color: '#666', marginTop: 4 }}>
+            {dados.map(d => (
+              <span key={d.chave} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block' }} />
+                {d.nome}
+              </span>
+            ))}
+          </div>
         </>
       )}
 
@@ -306,43 +322,82 @@ function ModalListaTemperatura({ temperatura, negocios, onFechar }) {
   )
 }
 
-function RankingsVendedores({ filtrados }) {
-  const mapa = {}
-  filtrados.forEach(n => {
-    const nome = n.consultor?.nome || 'Sem consultor'
-    if (!mapa[nome]) mapa[nome] = { ganho: 0, prospeccoes: 0, ganhos: 0, perdidos: 0 }
-    mapa[nome].prospeccoes++
-    if (n.etapa === 'ganha') { mapa[nome].ganhos++; mapa[nome].ganho += (n.valor_final || n.valor_cotacao || 0) }
-    if (n.etapa === 'perdida') mapa[nome].perdidos++
+function PipelinePorEtapa({ filtrados }) {
+  const linhas = ETAPAS.map(e => {
+    const itens = filtrados.filter(n => n.etapa === e.key)
+    const valor = itens.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+    return { ...e, qtd: itens.length, valor }
   })
-  const lista = Object.entries(mapa).map(([nome, v]) => ({
-    nome, ...v, conversao: (v.ganhos + v.perdidos) > 0 ? v.ganhos / (v.ganhos + v.perdidos) * 100 : 0,
-  }))
+  const maiorQtd = Math.max(1, ...linhas.map(l => l.qtd))
+  const totalNegocios = linhas.reduce((s, l) => s + l.qtd, 0)
 
-  const porGanho = [...lista].sort((a, b) => b.ganho - a.ganho).slice(0, 5)
-  const porProspeccao = [...lista].sort((a, b) => b.prospeccoes - a.prospeccoes).slice(0, 5)
-  const porConversao = [...lista].sort((a, b) => b.conversao - a.conversao).slice(0, 5)
+  function corBarra(chave) {
+    if (chave === 'ganha') return '#3b6d11'
+    if (chave === 'perdida') return '#a32d2d'
+    return '#7CA6D9'
+  }
 
   return (
-    <div style={{ display: 'flex', gap: 12, flex: '2 0 400px', flexWrap: 'wrap' }}>
-      <MiniRanking titulo="Top 5 · Ganho (R$)" lista={porGanho} render={l => formatarMoeda(l.ganho)} />
-      <MiniRanking titulo="Top 5 · Prospecção" lista={porProspeccao} render={l => l.prospeccoes} />
-      <MiniRanking titulo="Top 5 · Conversão" lista={porConversao} render={l => `${l.conversao.toFixed(0)}%`} />
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Pipeline por etapa</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {linhas.map(l => (
+          <div key={l.key}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 2 }}>
+              <span>{l.label}</span>
+              <span>{l.qtd} · {formatarMoeda(l.valor)}</span>
+            </div>
+            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 8 }}>
+              <div style={{
+                width: `${(l.qtd / maiorQtd) * 100}%`, background: corBarra(l.key),
+                height: 8, borderRadius: 4, minWidth: l.qtd > 0 ? 4 : 0,
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 11, color: '#999', marginTop: 10, marginBottom: 0 }}>
+        Total pipeline: {totalNegocios} negócio{totalNegocios !== 1 ? 's' : ''}
+      </p>
     </div>
   )
 }
 
-function MiniRanking({ titulo, lista, render }) {
+function TopVendedores({ filtrados }) {
+  const mapa = {}
+  filtrados.forEach(n => {
+    const nome = n.consultor?.nome || 'Sem consultor'
+    if (!mapa[nome]) mapa[nome] = { ganho: 0, ganhos: 0, perdidos: 0 }
+    if (n.etapa === 'ganha') { mapa[nome].ganhos++; mapa[nome].ganho += (n.valor_final || n.valor_cotacao || 0) }
+    if (n.etapa === 'perdida') mapa[nome].perdidos++
+  })
+  const lista = Object.entries(mapa)
+    .map(([nome, v]) => ({ nome, ...v, conversao: (v.ganhos + v.perdidos) > 0 ? v.ganhos / (v.ganhos + v.perdidos) * 100 : 0 }))
+    .sort((a, b) => b.ganho - a.ganho)
+    .slice(0, 5)
+
+  const maiorGanho = Math.max(1, ...lista.map(l => l.ganho))
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, flex: '1 0 180px' }}>
-      <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>{titulo}</p>
-      {lista.length === 0 && <p style={{ fontSize: 11, color: '#999' }}>Sem dados.</p>}
-      {lista.map((l, i) => (
-        <div key={l.nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
-          <span>{i + 1}. {l.nome}</span>
-          <span style={{ fontWeight: 600 }}>{render(l)}</span>
-        </div>
-      ))}
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Top vendedores</p>
+      {lista.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem dados ainda.</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {lista.map((l, i) => (
+          <div key={l.nome}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+              <span style={{ fontWeight: 600 }}>{i + 1} {l.nome}</span>
+              <span>
+                <strong>{formatarMoeda(l.ganho)}</strong>
+                <span style={{ color: '#999' }}> · {l.conversao.toFixed(1)}%</span>
+              </span>
+            </div>
+            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 6 }}>
+              <div style={{ width: `${(l.ganho / maiorGanho) * 100}%`, background: '#F77E01', height: 6, borderRadius: 4 }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -361,8 +416,22 @@ function VisaoGeral(props) {
   })
   const valorParados = negociosParados.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
 
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0)
+  const rotuloPeriodo = `Este mês (01–${fimMes.getDate()} ${inicioMes.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })})`
+
   return (
     <div style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#333' }}>Visão geral comercial</p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ ...selectStyle, background: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            📅 {rotuloPeriodo}
+          </span>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
         <KpiCard icone={Trophy} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} corIcone="#3b6d11" />
         <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
@@ -371,8 +440,9 @@ function VisaoGeral(props) {
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <PipelinePorEtapa filtrados={filtrados} />
         <GraficoTemperatura filtrados={filtrados} />
-        <RankingsVendedores filtrados={filtrados} />
+        <TopVendedores filtrados={filtrados} />
       </div>
 
       <FiltrosLinha {...props} />
@@ -586,12 +656,27 @@ function CardNegocio({ negocio, onClick }) {
         <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: temp ? temp.titulo : '#222' }}>
           {classificacao ? `${classificacao.medalha} ` : ''}{negocio.cliente?.razao_social}
         </p>
-        {pci && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor, borderRadius: 4, padding: '1px 5px' }}>
-            PCI {pci.sigla}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+          {pci && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: pci.cor, borderRadius: 4, padding: '1px 5px' }}>
+              PCI {pci.sigla}
+            </span>
+          )}
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+            background: diasAberto === 0 ? '#eaf3de' : (diasAberto > 15 ? '#fcebeb' : '#f1efe8'),
+            color: diasAberto === 0 ? '#3b6d11' : (diasAberto > 15 ? '#a32d2d' : '#666'),
+            whiteSpace: 'nowrap',
+          }}>
+            {diasAberto === 0 ? 'Novo' : `${diasAberto}d`}
           </span>
-        )}
+        </div>
       </div>
+      {negocio.cliente?.cidade && (
+        <p style={{ fontSize: 10, margin: '2px 0 0', color: temp ? temp.sub : '#999', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+          {negocio.cliente.cidade}
+        </p>
+      )}
       {negocio.produto_servico && (
         <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>{negocio.produto_servico}</p>
       )}
@@ -600,19 +685,12 @@ function CardNegocio({ negocio, onClick }) {
       </p>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
         <p style={{ fontSize: 11, margin: 0, color: temp ? temp.sub : '#777' }}>{negocio.consultor?.nome}</p>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
-          background: diasAberto > 15 ? '#fcebeb' : '#f1efe8',
-          color: diasAberto > 15 ? '#a32d2d' : '#666',
-        }}>
-          {diasAberto}d
-        </span>
+        {negocio.proxima_acao_data && (
+          <p style={{ fontSize: 11, margin: 0, color: atrasado ? '#c0392b' : (temp ? temp.sub : '#777'), fontWeight: atrasado ? 700 : 400 }}>
+            {atrasado ? '⚠ ' : '📅 '}{new Date(negocio.proxima_acao_data).toLocaleDateString('pt-BR')}
+          </p>
+        )}
       </div>
-      {negocio.proxima_acao_data && (
-        <p style={{ fontSize: 11, margin: '4px 0 0', color: atrasado ? '#c0392b' : (temp ? temp.sub : '#777'), fontWeight: atrasado ? 700 : 400 }}>
-          {atrasado ? '⚠ ' : ''}Próx: {new Date(negocio.proxima_acao_data).toLocaleDateString('pt-BR')}
-        </p>
-      )}
     </div>
   )
 }

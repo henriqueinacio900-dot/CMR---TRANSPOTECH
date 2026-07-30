@@ -97,6 +97,9 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
   const criadoEm = negocio.criado_em
     ? new Date(negocio.criado_em).toLocaleDateString('pt-BR')
     : null
+  const diasAberto = negocio.criado_em
+    ? Math.floor((Date.now() - new Date(negocio.criado_em)) / 86400000)
+    : 0
 
   const ultimoContato = negocio.ultima_interacao_em
     ? new Date(negocio.ultima_interacao_em).toLocaleDateString('pt-BR')
@@ -107,7 +110,16 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
       onClick={onAbrirDetalhe}
       style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: '10px 12px', cursor: 'pointer' }}
     >
-      <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{negocio.cliente?.razao_social}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{negocio.cliente?.razao_social}</p>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap',
+          background: diasAberto === 0 ? '#eaf3de' : '#f1efe8',
+          color: diasAberto === 0 ? '#3b6d11' : '#666',
+        }}>
+          {diasAberto === 0 ? 'Novo' : `${diasAberto}d`}
+        </span>
+      </div>
       {negocio.cliente?.cidade && (
         <p style={{ fontSize: 11, color: '#777', margin: '2px 0 0' }}>{negocio.cliente.cidade}</p>
       )}

@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { listarTodosClientes, buscarCoordenadasCache, salvarCoordenada } from './api'
+
+function AjustarZoom({ pontos }) {
+  const map = useMap()
+  useEffect(() => {
+    if (pontos.length === 0) return
+    if (pontos.length === 1) {
+      map.setView([pontos[0].latitude, pontos[0].longitude], 11)
+      return
+    }
+    const bounds = pontos.map(p => [p.latitude, p.longitude])
+    map.fitBounds(bounds, { padding: [40, 40] })
+  }, [pontos, map])
+  return null
+}
 
 function normalizarChave(cidade, estado) {
   return `${(cidade || '').trim().toLowerCase()}-${(estado || '').trim().toLowerCase()}`
@@ -83,18 +97,22 @@ export default function Mapa() {
 
       {!carregando && (
         <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
-          <MapContainer center={[-15, -50]} zoom={4} style={{ height: 520, width: '100%' }} scrollWheelZoom={true}>
+          <MapContainer center={[-15, -50]} zoom={4} style={{ height: 560, width: '100%' }} scrollWheelZoom={true}>
             <TileLayer
               attribution='&copy; OpenStreetMap contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            <AjustarZoom pontos={cidades} />
             {cidades.map(c => (
               <CircleMarker
                 key={c.chave}
                 center={[c.latitude, c.longitude]}
-                radius={8 + (c.total / maiorTotal) * 22}
-                pathOptions={{ color: '#F77E01', fillColor: '#F77E01', fillOpacity: 0.55 }}
+                radius={6 + (c.total / maiorTotal) * 14}
+                pathOptions={{ color: '#F77E01', fillColor: '#F77E01', fillOpacity: 0.55, weight: 2 }}
               >
+                <Tooltip permanent direction="top" offset={[0, -6]} opacity={0.9}>
+                  {c.cidade} ({c.total})
+                </Tooltip>
                 <Popup>
                   <strong>{c.cidade}{c.estado ? ` - ${c.estado}` : ''}</strong><br />
                   {c.total} cliente{c.total !== 1 ? 's' : ''}

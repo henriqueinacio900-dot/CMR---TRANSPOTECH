@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer as RRC, Legend as RLegend } from 'recharts'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal } from './api'
-import { classificarPci, formatarMoeda } from './constants'
+import { ETAPAS, classificarPci, formatarMoeda } from './constants'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 const ETAPA_PARA_CONFIG = {
@@ -83,9 +85,99 @@ export default function Dashboard() {
   const porVendedor = agrupar(negocios, n => n.consultor?.nome || 'Sem consultor')
   const porDepartamento = agrupar(negocios, n => n.departamento?.nome || 'Sem departamento')
 
+  function gerarRelatorioPDF() {
+    const doc = new jsPDF()
+    const hoje = new Date().toLocaleDateString('pt-BR')
+
+    doc.setFillColor(247, 126, 1)
+    doc.rect(0, 0, 210, 22, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(16)
+    doc.text('TranspoTech — Relatório Comercial', 14, 14)
+    doc.setFontSize(10)
+    doc.text(hoje, 180, 14)
+
+    doc.setTextColor(30, 30, 30)
+    let y = 32
+    doc.setFontSize(13)
+    doc.text('Indicadores gerais', 14, y)
+    y += 4
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Indicador', 'Valor']],
+      body: [
+        ['Pipeline total', formatarMoeda(pipelineTotal)],
+        ['Pipeline ponderado', formatarMoeda(pipelinePonderado)],
+        ['Ganho no mês', formatarMoeda(valorGanhoMes)],
+        ['Perdido no mês', formatarMoeda(valorPerdidoMes)],
+        ['Taxa de conversão', `${taxaConversao.toFixed(0)}%`],
+        ['Ticket médio', formatarMoeda(ticketMedio)],
+        ['Prospecções no mês', String(prospeccoesMes)],
+        ['Orçamentos enviados no mês', String(orcamentosMes)],
+        ['Follow-ups atrasados', String(followupsAtrasados)],
+        ['Negócios sem próxima ação', String(semProximaAcao)],
+        ['Oportunidades paradas', String(oportunidadesParadas)],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [247, 126, 1] },
+      margin: { left: 14, right: 14 },
+    })
+
+    y = doc.lastAutoTable.finalY + 10
+    doc.setFontSize(13)
+    doc.text('Funil por etapa', 14, y)
+    y += 4
+    const funilLinhas = ETAPAS.map(e => {
+      const itens = negocios.filter(n => n.etapa === e.key)
+      return [e.label, String(itens.length), formatarMoeda(itens.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0))]
+    })
+    autoTable(doc, {
+      startY: y,
+      head: [['Etapa', 'Negócios', 'Valor']],
+      body: funilLinhas,
+      theme: 'striped',
+      headStyles: { fillColor: [247, 126, 1] },
+      margin: { left: 14, right: 14 },
+    })
+
+    y = doc.lastAutoTable.finalY + 10
+    if (y > 250) { doc.addPage(); y = 20 }
+    doc.setFontSize(13)
+    doc.text('Conversão por vendedor', 14, y)
+    y += 4
+    autoTable(doc, {
+      startY: y,
+      head: [['Vendedor', 'Ganhos', 'Perdidos', 'Conversão', 'Valor ganho']],
+      body: porVendedor.map(v => [v.nome, String(v.ganhos), String(v.perdidos), `${v.conversao.toFixed(0)}%`, formatarMoeda(v.valorGanho)]),
+      theme: 'striped',
+      headStyles: { fillColor: [247, 126, 1] },
+      margin: { left: 14, right: 14 },
+    })
+
+    y = doc.lastAutoTable.finalY + 10
+    if (y > 250) { doc.addPage(); y = 20 }
+    doc.setFontSize(13)
+    doc.text('Conversão por departamento', 14, y)
+    y += 4
+    autoTable(doc, {
+      startY: y,
+      head: [['Departamento', 'Ganhos', 'Perdidos', 'Conversão', 'Valor ganho']],
+      body: porDepartamento.map(v => [v.nome, String(v.ganhos), String(v.perdidos), `${v.conversao.toFixed(0)}%`, formatarMoeda(v.valorGanho)]),
+      theme: 'striped',
+      headStyles: { fillColor: [247, 126, 1] },
+      margin: { left: 14, right: 14 },
+    })
+
+    doc.save(`relatorio-transpotech-${hoje.replace(/\//g, '-')}.pdf`)
+  }
+
   return (
     <div style={{ padding: 24 }}>
-      <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>Indicadores</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Indicadores</p>
+        <button onClick={gerarRelatorioPDF} style={botaoPdf}>⬇ Baixar relatório PDF</button>
+      </div>
 
       <Secao titulo="Visão geral">
         <div style={grid4}>
@@ -459,3 +551,8 @@ function Card({ label, valor, cor }) {
 }
 
 const grid4 = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }
+
+const botaoPdf = {
+  background: '#a32d2d', color: '#fff', border: 'none', borderRadius: 8,
+  padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+}

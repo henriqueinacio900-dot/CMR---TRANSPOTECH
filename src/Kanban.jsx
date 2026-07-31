@@ -453,6 +453,11 @@ function TopVendedores({ filtrados }) {
 
 function VisaoGeral(props) {
   const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado } = props
+  const filtradosPeriodo = filtrados.filter(n => {
+    if (!n.criado_em) return false
+    const d = new Date(n.criado_em)
+    return d >= periodo.inicio && d <= periodo.fim
+  })
   const followupsHoje = filtrados.filter(n => {
     if (!n.proxima_acao_data) return false
     const d = new Date(n.proxima_acao_data)
@@ -500,10 +505,13 @@ function VisaoGeral(props) {
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <PipelinePorEtapa filtrados={filtrados} />
-        <GraficoTemperatura filtrados={filtrados} />
-        <TopVendedores filtrados={filtrados} />
+        <PipelinePorEtapa filtrados={filtradosPeriodo} />
+        <GraficoTemperatura filtrados={filtradosPeriodo} />
+        <TopVendedores filtrados={filtradosPeriodo} />
       </div>
+      <p style={{ fontSize: 11, color: '#999', margin: '-14px 0 20px' }}>
+        Funil, temperatura e ranking acima consideram a Data 1º contato dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
+      </p>
 
       <FiltrosLinha {...props} />
 

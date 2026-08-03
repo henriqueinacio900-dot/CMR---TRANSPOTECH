@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { criarCliente, criarContato, criarNegocio, buscarClientesDuplicados } from './api'
+import { useEffect, useRef, useState } from 'react'
+import { criarCliente, criarContato, criarNegocio, buscarClientesDuplicados, listarContatos } from './api'
 import { CORES_MARCA, ORIGENS, PROXIMAS_ACOES, PAPEIS_CONTATO, formatarTelefoneInput, paraISOLocal } from './constants'
 
 const ETAPAS_INICIAIS = [
@@ -17,6 +17,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [clienteExistente, setClienteExistente] = useState(null)
   const [sugestoes, setSugestoes] = useState([])
   const [buscandoSugestao, setBuscandoSugestao] = useState(false)
+  const timeoutBusca = useRef(null)
 
   // Contato principal
   const [contatoNome, setContatoNome] = useState('')
@@ -24,6 +25,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [contatoTelefone, setContatoTelefone] = useState('')
   const [contatoEmail, setContatoEmail] = useState('')
   const [contatoPapel, setContatoPapel] = useState('')
+  const [contatoJaExistente, setContatoJaExistente] = useState(false)
 
   // Negócio
   const [emAndamento, setEmAndamento] = useState(false)
@@ -39,24 +41,44 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
 
   function mudarNome(valor) {
     setRazaoSocial(valor)
-    if (clienteExistente) setClienteExistente(null) // voltou a editar, solta o vínculo automático
-  }
+    if (clienteExistente) { setClienteExistente(null); setContatoJaExistente(false) } // voltou a editar, solta o vínculo automático
 
-  async function verificarNomeDigitado() {
-    if (!razaoSocial.trim() || clienteExistente) return
+    clearTimeout(timeoutBusca.current)
+    if (valor.trim().length < 3) {
+      setSugestoes([])
+      return
+    }
     setBuscandoSugestao(true)
-    const encontrados = await buscarClientesDuplicados({ razao_social: razaoSocial })
-    setSugestoes(encontrados)
-    setBuscandoSugestao(false)
+    timeoutBusca.current = setTimeout(async () => {
+      const encontrados = await buscarClientesDuplicados({ razao_social: valor })
+      setSugestoes(encontrados)
+      setBuscandoSugestao(false)
+    }, 350)
   }
 
-  function escolherClienteExistente(cliente) {
+  async function escolherClienteExistente(cliente) {
     setClienteExistente(cliente)
     setRazaoSocial(cliente.razao_social)
     setCidade(cliente.cidade || '')
     setEstado(cliente.estado || '')
     if (cliente.departamento_id) setDepartamentoId(cliente.departamento_id)
     setSugestoes([])
+
+    const contatos = await listarContatos(cliente.id)
+    const principal = contatos.find(c => c.principal) || contatos[0]
+    if (principal) {
+      setContatoNome(principal.nome || '')
+      setContatoCargo(principal.cargo || '')
+      setContatoTelefone(principal.telefone || cliente.telefone_whats || '')
+      setContatoEmail(principal.email || '')
+      setContatoPapel(principal.papel || '')
+      setContatoJaExistente(true)
+    } else if (cliente.telefone_whats) {
+      setContatoTelefone(cliente.telefone_whats)
+      setContatoJaExistente(false)
+    } else {
+      setContatoJaExistente(false)
+    }
   }
 
   async function salvar(e) {
@@ -77,7 +99,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
         clienteId = novoCliente.id
       }
 
-      if (contatoNome) {
+      if (contatoNome && !contatoJaExistente) {
         await criarContato({
           cliente_id: clienteId,
           nome: contatoNome,
@@ -124,43 +146,41 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
 
         <Secao titulo="Dados do cliente">
           <Campo label="Nome do cliente">
-            <input
-              required value={razaoSocial}
-              onChange={e => mudarNome(e.target.value)}
-              onBlur={verificarNomeDigitado}
-              style={inputStyle}
-            />
-          </Campo>
-
-          {buscandoSugestao && <p style={{ fontSize: 11, color: '#999', margin: '-6px 0 10px' }}>Procurando cliente parecido...</p>}
-
-          {sugestoes.length > 0 && (
-            <div style={{ background: '#FFF3E8', border: '1px solid #F0C89A', borderRadius: 8, padding: 10, marginBottom: 14 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 6px', color: '#8a4b00' }}>
-                Já existe um cadastro parecido — clique pra usar os dados dele:
-              </p>
-              {sugestoes.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => escolherClienteExistente(s)}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left', background: '#fff', border: '1px solid #F0C89A',
-                    borderRadius: 6, padding: '6px 10px', marginBottom: 4, fontSize: 12, cursor: 'pointer', color: '#333',
-                  }}
-                >
-                  {s.razao_social} {s.cidade ? `· ${s.cidade}` : ''}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setSugestoes([])}
-                style={{ background: 'none', border: 'none', fontSize: 11, color: '#8a4b00', textDecoration: 'underline', cursor: 'pointer', marginTop: 2 }}
-              >
-                Não, é um cliente novo mesmo
-              </button>
+            <div style={{ position: 'relative' }}>
+              <input
+                required value={razaoSocial}
+                onChange={e => mudarNome(e.target.value)}
+                autoComplete="off"
+                style={inputStyle}
+              />
+              {(buscandoSugestao || sugestoes.length > 0) && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                  background: '#fff', border: '1px solid #ddd', borderRadius: 8,
+                  marginTop: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden',
+                }}>
+                  {buscandoSugestao && (
+                    <p style={{ fontSize: 12, color: '#999', margin: 0, padding: '8px 10px' }}>Procurando...</p>
+                  )}
+                  {!buscandoSugestao && sugestoes.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => escolherClienteExistente(s)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', background: '#fff', border: 'none',
+                        borderBottom: '1px solid #f2f2f2', padding: '8px 10px', fontSize: 13, cursor: 'pointer', color: '#333',
+                      }}
+                      onMouseDown={ev => ev.preventDefault()}
+                    >
+                      <strong>{s.razao_social}</strong>
+                      {s.cidade && <span style={{ color: '#999', fontSize: 12 }}> · {s.cidade}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </Campo>
 
           {clienteExistente && (
             <p style={{ fontSize: 11, color: '#3b6d11', margin: '-6px 0 10px' }}>

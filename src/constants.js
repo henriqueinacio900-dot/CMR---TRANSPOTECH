@@ -4,8 +4,13 @@ export const CORES_MARCA = {
 
 export const CORES_TEMPERATURA = {
   frio:   { grad: 'linear-gradient(135deg, #E6F1FB, #B5D4F4)', titulo: '#042C53', sub: '#185FA5' },
-  morno:  { grad: 'linear-gradient(135deg, #FAECE7, #F0997B)', titulo: '#4A1B0C', sub: '#993C1D' },
+  morno:  { grad: 'linear-gradient(135deg, #FDF3D8, #E8B93A)', titulo: '#5A4508', sub: '#8A6D0F' },
   quente: { grad: 'linear-gradient(135deg, #FCEBEB, #F09595)', titulo: '#501313', sub: '#A32D2D' },
+}
+
+export const CORES_GANHA = {
+  faturado: { grad: 'linear-gradient(135deg, #B9E6A0, #5CAF3B)', titulo: '#1B3D0A', sub: '#2E5C17' },
+  previsto: { grad: 'linear-gradient(135deg, #EAF6E0, #C4E8B0)', titulo: '#2E5C17', sub: '#4C7A30' },
 }
 
 // Funil (Oportunidade identificada removida a pedido)

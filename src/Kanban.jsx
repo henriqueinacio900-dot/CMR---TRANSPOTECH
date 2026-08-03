@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon } from 'lucide-react'
 import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
-import { ETAPAS, CORES_TEMPERATURA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
+import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
@@ -725,7 +725,9 @@ function ConversaoEtapas({ filtrados }) {
 }
 
 function CardNegocio({ negocio, onClick }) {
-  const temp = CORES_TEMPERATURA[negocio.temperatura]
+  const temp = negocio.etapa === 'ganha'
+    ? CORES_GANHA[negocio.status_faturamento === 'faturado' ? 'faturado' : 'previsto']
+    : CORES_TEMPERATURA[negocio.temperatura]
   const notaPci = negocio.avaliacoes_pci?.[0]?.nota_total
   const pci = notaPci !== undefined ? classificarPci(notaPci) : null
   const atrasado = negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()

@@ -6,7 +6,7 @@ import {
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
-  formatarMoeda, formatarData, formatarTelefoneInput,
+  formatarMoeda, formatarData, formatarTelefoneInput, paraISOLocal, paraDatetimeLocalInput,
 } from './constants'
 import PciForm from './PciForm.jsx'
 
@@ -284,10 +284,11 @@ function AbaOportunidade({ negocio, onAtualizado }) {
     previsao_fechamento: negocio.previsao_fechamento || '',
     numero_orcamento: negocio.numero_orcamento || '',
     proxima_acao: negocio.proxima_acao || '',
-    proxima_acao_data: negocio.proxima_acao_data ? negocio.proxima_acao_data.slice(0, 16) : '',
+    proxima_acao_data: paraDatetimeLocalInput(negocio.proxima_acao_data),
     observacoes: negocio.observacoes || '',
   })
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
 
   async function salvarNovoValor() {
     setSalvando(true)
@@ -302,14 +303,19 @@ function AbaOportunidade({ negocio, onAtualizado }) {
 
   async function salvar() {
     setSalvando(true)
+    setErro('')
     try {
       await atualizarNegocio(negocio.id, {
         ...campos,
         temperatura: campos.temperatura || null,
         probabilidade_fechamento: campos.probabilidade_fechamento ? Number(campos.probabilidade_fechamento) : null,
-        proxima_acao_data: campos.proxima_acao_data || null,
+        previsao_fechamento: campos.previsao_fechamento || null,
+        proxima_acao_data: paraISOLocal(campos.proxima_acao_data),
       })
       onAtualizado()
+    } catch (e) {
+      console.error(e)
+      setErro('Não deu pra salvar: ' + (e.message || 'erro desconhecido'))
     } finally {
       setSalvando(false)
     }
@@ -372,6 +378,7 @@ function AbaOportunidade({ negocio, onAtualizado }) {
       <Campo label="Observações">
         <textarea rows={3} value={campos.observacoes} onChange={e => setCampos({ ...campos, observacoes: e.target.value })} style={{ ...inputStyle, resize: 'vertical' }} />
       </Campo>
+      {erro && <p style={{ color: '#a32d2d', fontSize: 12, margin: 0 }}>{erro}</p>}
       <button onClick={salvar} disabled={salvando} style={botaoPequeno}>{salvando ? 'Salvando...' : 'Salvar alterações'}</button>
     </div>
   )
@@ -502,7 +509,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     try {
       await moverEtapa(negocio.id, novaEtapa, {
         proxima_acao: proximaAcaoNova,
-        proxima_acao_data: proximaAcaoDataNova,
+        proxima_acao_data: paraISOLocal(proximaAcaoDataNova),
       })
       onAtualizado()
       onFechar()

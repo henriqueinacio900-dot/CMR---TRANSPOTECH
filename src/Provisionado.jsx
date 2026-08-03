@@ -42,6 +42,9 @@ export default function Provisionado() {
     linhas.push(['META', meta])
     linhas.push(['FATURADO', totalFaturado])
     linhas.push([])
+    linhas.push(['Faturado no mês (detalhado)'])
+    faturados.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || 0]))
+    linhas.push([])
     linhas.push(['Orçamentos aprovados fatura no mês'])
     previstos.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
     linhas.push(['Total previsto (esta lista)', totalPrevisto])
@@ -76,7 +79,13 @@ export default function Provisionado() {
         <Card label="Saldo para a meta" valor={formatarMoeda(saldoParaMeta)} cor={saldoParaMeta > 0 ? '#a32d2d' : '#3b6d11'} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 16 }}>
+        <Tabela
+          titulo="Faturado no mês"
+          itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || 0 }))}
+          total={totalFaturado}
+          totalLabel="Total faturado"
+        />
         <Tabela
           titulo="Orçamentos aprovados fatura no mês"
           itens={previstos.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}

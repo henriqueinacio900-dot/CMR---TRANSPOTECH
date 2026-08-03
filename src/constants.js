@@ -184,6 +184,23 @@ export function formatarTelefoneInput(valor) {
   return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
 }
 
+// Converte o valor de um input date/datetime-local (horário local do navegador)
+// pro timestamp UTC correto que o banco espera.
+export function paraISOLocal(valor) {
+  if (!valor) return null
+  const comHora = valor.length > 10 ? valor : `${valor}T00:00`
+  return new Date(comHora).toISOString()
+}
+
+// Converte um timestamp do banco (UTC) de volta pro formato que um input
+// datetime-local entende, já no horário local do navegador.
+export function paraDatetimeLocalInput(isoString) {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function formatarMoeda(valor) {
   return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 }

@@ -5,8 +5,10 @@ export const CORES_MARCA = {
 export const CORES_TEMPERATURA = {
   frio:   { grad: 'linear-gradient(135deg, #E6F1FB, #B5D4F4)', titulo: '#042C53', sub: '#185FA5' },
   morno:  { grad: 'linear-gradient(135deg, #FDF3D8, #E8B93A)', titulo: '#5A4508', sub: '#8A6D0F' },
-  quente: { grad: 'linear-gradient(135deg, #FCEBEB, #F09595)', titulo: '#501313', sub: '#A32D2D' },
+  quente: { grad: 'linear-gradient(135deg, #FBDDB8, #E8820C)', titulo: '#5A2E00', sub: '#8A4700' },
 }
+
+export const CORES_PERDIDA = { grad: 'linear-gradient(135deg, #F6C6C6, #D9534F)', titulo: '#4A0A0A', sub: '#7A1F1F' }
 
 export const CORES_GANHA = {
   faturado: { grad: 'linear-gradient(135deg, #B9E6A0, #5CAF3B)', titulo: '#1B3D0A', sub: '#2E5C17' },

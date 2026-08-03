@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { criarCliente, criarContato, criarNegocio, buscarClientesDuplicados } from './api'
-import { CORES_MARCA, ORIGENS, PROXIMAS_ACOES, PAPEIS_CONTATO, formatarTelefoneInput } from './constants'
+import { CORES_MARCA, ORIGENS, PROXIMAS_ACOES, PAPEIS_CONTATO, formatarTelefoneInput, paraISOLocal } from './constants'
 
 const ETAPAS_INICIAIS = [
   { key: 'prospeccao', label: 'Prospecção (padrão)' },
@@ -14,6 +14,9 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
   const [departamentoId, setDepartamentoId] = useState(departamentos[0]?.id || '')
+  const [clienteExistente, setClienteExistente] = useState(null)
+  const [sugestoes, setSugestoes] = useState([])
+  const [buscandoSugestao, setBuscandoSugestao] = useState(false)
 
   // Contato principal
   const [contatoNome, setContatoNome] = useState('')
@@ -31,41 +34,52 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
   const [proximaAcao, setProximaAcao] = useState('')
   const [proximaAcaoData, setProximaAcaoData] = useState('')
 
-  const [duplicados, setDuplicados] = useState([])
-  const [verificando, setVerificando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
-  const [confirmarMesmoAssim, setConfirmarMesmoAssim] = useState(false)
 
-  async function verificarDuplicidade() {
-    setVerificando(true)
-    const encontrados = await buscarClientesDuplicados({ razao_social: razaoSocial, telefone: contatoTelefone })
-    setDuplicados(encontrados)
-    setVerificando(false)
-    return encontrados
+  function mudarNome(valor) {
+    setRazaoSocial(valor)
+    if (clienteExistente) setClienteExistente(null) // voltou a editar, solta o vínculo automático
+  }
+
+  async function verificarNomeDigitado() {
+    if (!razaoSocial.trim() || clienteExistente) return
+    setBuscandoSugestao(true)
+    const encontrados = await buscarClientesDuplicados({ razao_social: razaoSocial })
+    setSugestoes(encontrados)
+    setBuscandoSugestao(false)
+  }
+
+  function escolherClienteExistente(cliente) {
+    setClienteExistente(cliente)
+    setRazaoSocial(cliente.razao_social)
+    setCidade(cliente.cidade || '')
+    setEstado(cliente.estado || '')
+    if (cliente.departamento_id) setDepartamentoId(cliente.departamento_id)
+    setSugestoes([])
   }
 
   async function salvar(e) {
     e.preventDefault()
     setErro('')
-
-    if (!confirmarMesmoAssim) {
-      const encontrados = await verificarDuplicidade()
-      if (encontrados.length > 0) return // mostra aviso, espera confirmação
-    }
-
     setSalvando(true)
     try {
-      const cliente = await criarCliente({
-        razao_social: razaoSocial,
-        cidade,
-        estado: estado || null,
-        departamento_id: departamentoId,
-      })
+      let clienteId
+      if (clienteExistente) {
+        clienteId = clienteExistente.id
+      } else {
+        const novoCliente = await criarCliente({
+          razao_social: razaoSocial,
+          cidade,
+          estado: estado || null,
+          departamento_id: departamentoId,
+        })
+        clienteId = novoCliente.id
+      }
 
       if (contatoNome) {
         await criarContato({
-          cliente_id: cliente.id,
+          cliente_id: clienteId,
           nome: contatoNome,
           cargo: contatoCargo || null,
           telefone: contatoTelefone || null,
@@ -76,7 +90,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
       }
 
       await criarNegocio({
-        cliente_id: cliente.id,
+        cliente_id: clienteId,
         departamento_id: departamentoId,
         etapa: etapaInicial,
         titulo: razaoSocial,
@@ -85,7 +99,7 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
         temperatura: etapaInicial === 'negociacao_decisao' ? temperatura : null,
         data_orcamento: etapaInicial !== 'prospeccao' ? new Date().toISOString().slice(0, 10) : null,
         proxima_acao: proximaAcao || null,
-        proxima_acao_data: proximaAcaoData || null,
+        proxima_acao_data: paraISOLocal(proximaAcaoData),
       })
 
       onCriado()
@@ -110,8 +124,50 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
 
         <Secao titulo="Dados do cliente">
           <Campo label="Nome do cliente">
-            <input required value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} style={inputStyle} />
+            <input
+              required value={razaoSocial}
+              onChange={e => mudarNome(e.target.value)}
+              onBlur={verificarNomeDigitado}
+              style={inputStyle}
+            />
           </Campo>
+
+          {buscandoSugestao && <p style={{ fontSize: 11, color: '#999', margin: '-6px 0 10px' }}>Procurando cliente parecido...</p>}
+
+          {sugestoes.length > 0 && (
+            <div style={{ background: '#FFF3E8', border: '1px solid #F0C89A', borderRadius: 8, padding: 10, marginBottom: 14 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 6px', color: '#8a4b00' }}>
+                Já existe um cadastro parecido — clique pra usar os dados dele:
+              </p>
+              {sugestoes.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => escolherClienteExistente(s)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', background: '#fff', border: '1px solid #F0C89A',
+                    borderRadius: 6, padding: '6px 10px', marginBottom: 4, fontSize: 12, cursor: 'pointer', color: '#333',
+                  }}
+                >
+                  {s.razao_social} {s.cidade ? `· ${s.cidade}` : ''}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSugestoes([])}
+                style={{ background: 'none', border: 'none', fontSize: 11, color: '#8a4b00', textDecoration: 'underline', cursor: 'pointer', marginTop: 2 }}
+              >
+                Não, é um cliente novo mesmo
+              </button>
+            </div>
+          )}
+
+          {clienteExistente && (
+            <p style={{ fontSize: 11, color: '#3b6d11', margin: '-6px 0 10px' }}>
+              ✓ Usando o cadastro já existente — só essa oportunidade nova será criada.
+            </p>
+          )}
+
           <div style={{ display: 'flex', gap: 8 }}>
             <Campo label="Cidade" style={{ flex: 2 }}>
               <input value={cidade} onChange={e => setCidade(e.target.value)} style={inputStyle} />
@@ -126,23 +182,6 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
             </select>
           </Campo>
         </Secao>
-
-        {duplicados.length > 0 && (
-          <div style={{ background: '#FFF3E8', border: '1px solid #F0C89A', borderRadius: 8, padding: 10, marginBottom: 14 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 6px', color: '#8a4b00' }}>
-              Encontrei cliente(s) parecido(s):
-            </p>
-            {duplicados.map(d => (
-              <p key={d.id} style={{ fontSize: 12, margin: '2px 0', color: '#555' }}>
-                {d.razao_social} {d.cidade ? `· ${d.cidade}` : ''}
-              </p>
-            ))}
-            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-              <input type="checkbox" checked={confirmarMesmoAssim} onChange={e => setConfirmarMesmoAssim(e.target.checked)} />
-              Mesmo assim, é um cliente novo — continuar
-            </label>
-          </div>
-        )}
 
         <Secao titulo="Contato principal">
           <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -221,8 +260,8 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
           <button type="button" onClick={onFechar} style={{ ...botaoStyle, background: '#eee', color: '#333' }}>
             Cancelar
           </button>
-          <button type="submit" disabled={salvando || verificando} style={{ ...botaoStyle, background: CORES_MARCA.laranja, color: '#fff' }}>
-            {salvando ? 'Salvando...' : verificando ? 'Verificando...' : 'Salvar'}
+          <button type="submit" disabled={salvando} style={{ ...botaoStyle, background: CORES_MARCA.laranja, color: '#fff' }}>
+            {salvando ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </form>

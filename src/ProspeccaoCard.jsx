@@ -167,6 +167,7 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input
               type="number"
+              step="0.01"
               placeholder="Valor da cotação (R$)"
               value={valor}
               onChange={e => setValor(e.target.value)}

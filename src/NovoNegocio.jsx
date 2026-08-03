@@ -225,7 +225,7 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
           {emAndamento && etapaInicial !== 'prospeccao' && (
             <div style={{ display: 'flex', gap: 8 }}>
               <Campo label="Valor da cotação (R$)" style={{ flex: 1 }}>
-                <input type="number" value={valorCotacao} onChange={e => setValorCotacao(e.target.value)} style={inputStyle} />
+                <input type="number" step="0.01" value={valorCotacao} onChange={e => setValorCotacao(e.target.value)} style={inputStyle} />
               </Campo>
               {etapaInicial === 'negociacao_decisao' && (
                 <Campo label="Temperatura" style={{ flex: 1 }}>

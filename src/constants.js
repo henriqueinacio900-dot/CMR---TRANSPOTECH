@@ -224,7 +224,7 @@ export function paraDatetimeLocalInput(isoString) {
 }
 
 export function formatarMoeda(valor) {
-  return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+  return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function formatarData(data) {

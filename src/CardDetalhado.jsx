@@ -337,12 +337,12 @@ function AbaOportunidade({ negocio, onAtualizado }) {
         </label>
         {!editandoValor ? (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="number" value={negocio.valor_cotacao || ''} disabled style={{ ...inputStyle, background: '#f2f2f2', color: '#666' }} />
+            <input type="number" step="0.01" value={negocio.valor_cotacao || ''} disabled style={{ ...inputStyle, background: '#f2f2f2', color: '#666' }} />
             <button onClick={() => { setNovoValor(negocio.valor_cotacao || ''); setEditandoValor(true) }} style={botaoPequeno}>✏️</button>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 6 }}>
-            <input type="number" value={novoValor} onChange={e => setNovoValor(e.target.value)} style={inputStyle} autoFocus />
+            <input type="number" step="0.01" value={novoValor} onChange={e => setNovoValor(e.target.value)} style={inputStyle} autoFocus />
             <button onClick={() => setEditandoValor(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button onClick={salvarNovoValor} disabled={salvando} style={botaoPequeno}>Salvar</button>
           </div>

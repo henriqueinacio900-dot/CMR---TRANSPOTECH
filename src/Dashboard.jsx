@@ -384,11 +384,21 @@ function GraficoProdutividade({ negocios, metas }) {
   )
 }
 
+function contarDiasUteis(ano, mes, ateDia) {
+  let dias = 0
+  for (let d = 1; d <= ateDia; d++) {
+    const diaSemana = new Date(ano, mes, d).getDay()
+    if (diaSemana !== 0 && diaSemana !== 6) dias++
+  }
+  return dias
+}
+
 function QuadroProjecao({ negocios, consultores, metas }) {
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const diasPassados = agora.getDate()
-  const diasTotais = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate()
+  const ultimoDiaMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate()
+  const diasUteisPassados = contarDiasUteis(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  const diasUteisTotais = contarDiasUteis(agora.getFullYear(), agora.getMonth(), ultimoDiaMes)
 
   const linhas = consultores.map(c => {
     const meusNegocios = negocios.filter(n => n.consultor?.id === c.id)
@@ -405,8 +415,8 @@ function QuadroProjecao({ negocios, consultores, metas }) {
     const faltante = Math.max(meta - ganhoAtual, 0)
     const negociosAFechar = tkm > 0 ? faltante / tkm : 0
 
-    const ritmoDiario = diasPassados > 0 ? ganhoAtual / diasPassados : 0
-    const projecaoFimMes = ritmoDiario * diasTotais
+    const ritmoDiario = diasUteisPassados > 0 ? ganhoAtual / diasUteisPassados : 0
+    const projecaoFimMes = ritmoDiario * diasUteisTotais
     const vaiBater = meta > 0 ? projecaoFimMes >= meta : null
 
     return { nome: c.nome, prospeccoes, orcamentosGerados, tkm, conversao, meta, ganhoAtual, faltante, negociosAFechar, projecaoFimMes, vaiBater }
@@ -456,7 +466,7 @@ function QuadroProjecao({ negocios, consultores, metas }) {
         </tbody>
       </table>
       <p style={{ fontSize: 11, color: '#999', marginTop: 8 }}>
-        Projeção calculada pelo ritmo médio de faturamento até hoje ({diasPassados} de {diasTotais} dias do mês), projetado pro mês inteiro. Cadastre a meta de cada um acima pra habilitar.
+        Projeção calculada pelo ritmo médio de faturamento por dia útil ({diasUteisPassados} de {diasUteisTotais} dias úteis do mês, seg-sex), projetado pro mês inteiro. Cadastre a meta de cada um acima pra habilitar.
       </p>
     </div>
   )

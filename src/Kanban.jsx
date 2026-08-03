@@ -537,11 +537,30 @@ function VisaoGeral(props) {
 }
 
 function PipelineBoard(props) {
+  const [buscaOrcamento, setBuscaOrcamento] = useState('')
+
+  const filtradosPorOrcamento = buscaOrcamento
+    ? props.filtrados.filter(n => (n.numero_orcamento || '').toLowerCase().includes(buscaOrcamento.toLowerCase()))
+    : props.filtrados
+
   return (
     <div style={{ padding: 24 }}>
       <PainelMeta negocios={props.negocios} euMesmo={props.euMesmo} metas={props.metas} />
       <FiltrosLinha {...props} />
-      <QuadroKanban filtrados={props.filtrados} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} />
+      <div style={{ marginBottom: 12 }}>
+        <input
+          placeholder="Buscar por número do orçamento..."
+          value={buscaOrcamento}
+          onChange={e => setBuscaOrcamento(e.target.value)}
+          style={{ ...selectStyle, width: 260 }}
+        />
+        {buscaOrcamento && (
+          <span style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>
+            {filtradosPorOrcamento.length} encontrado{filtradosPorOrcamento.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+      <QuadroKanban filtrados={filtradosPorOrcamento} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} />
     </div>
   )
 }
@@ -753,6 +772,9 @@ function CardNegocio({ negocio, onClick }) {
       )}
       {negocio.produto_servico && (
         <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>{negocio.produto_servico}</p>
+      )}
+      {negocio.numero_orcamento && (
+        <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>Orçamento: {negocio.numero_orcamento}</p>
       )}
       <p style={{ fontSize: 13, margin: '4px 0 0', fontWeight: 600, color: temp ? temp.titulo : '#222' }}>
         {formatarMoeda(negocio.valor_cotacao)}

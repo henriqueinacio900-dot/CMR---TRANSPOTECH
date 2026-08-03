@@ -185,10 +185,12 @@ export function formatarTelefoneInput(valor) {
 }
 
 // Converte o valor de um input date/datetime-local (horário local do navegador)
-// pro timestamp UTC correto que o banco espera.
+// pro timestamp UTC correto que o banco espera. Quando só a data é escolhida
+// (sem hora), usa meio-dia em vez de meia-noite — meia-noite fica bem na borda
+// do dia e qualquer conversão de fuso podia empurrar pro dia anterior errado.
 export function paraISOLocal(valor) {
   if (!valor) return null
-  const comHora = valor.length > 10 ? valor : `${valor}T00:00`
+  const comHora = valor.length > 10 ? valor : `${valor}T12:00`
   return new Date(comHora).toISOString()
 }
 

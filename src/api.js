@@ -70,7 +70,7 @@ export async function buscarClientesDuplicados({ cnpj, razao_social, telefone, e
 
   const { data, error } = await supabase
     .from('clientes')
-    .select('id, razao_social, nome_fantasia, cnpj, telefone_whats, cidade')
+    .select('id, razao_social, nome_fantasia, cnpj, telefone_whats, cidade, estado, departamento_id')
     .or(termos.join(','))
     .limit(5)
 
@@ -384,7 +384,7 @@ export async function listarHistorico(negocioId) {
 export async function listarTodosClientes() {
   const { data, error } = await supabase
     .from('clientes')
-    .select('id, razao_social, nome_fantasia, cnpj, cidade, telefone_whats, status_cliente, departamento:departamentos(nome)')
+    .select('id, razao_social, nome_fantasia, cnpj, cidade, estado, telefone_whats, status_cliente, departamento_id, qtd_maquinas_estimada, observacoes_gerais, departamento:departamentos(id, nome)')
     .order('razao_social')
   if (error) { console.error(error); return [] }
   return data
@@ -418,6 +418,12 @@ export async function salvarMetaMensal(consultorId, ano, mes, valorMeta) {
     .upsert({ consultor_id: consultorId, ano, mes, valor_meta: valorMeta }, { onConflict: 'consultor_id,ano,mes' })
     .select()
     .single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarCliente(id, dados) {
+  const { data, error } = await supabase.from('clientes').update(dados).eq('id', id).select().single()
   if (error) throw error
   return data
 }

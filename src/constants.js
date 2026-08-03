@@ -158,6 +158,19 @@ export const PERGUNTAS_PCI = [
   },
 ]
 
+export const CORES_AGENDA = {
+  visita: { cor: '#2F6FB0', label: 'Visita presencial' },
+  whatsapp: { cor: '#3b6d11', label: 'WhatsApp' },
+  email: { cor: '#E08E00', label: 'E-mail' },
+  ligacao: { cor: '#7B3FA0', label: 'Ligação' },
+  reuniao: { cor: '#C0392B', label: 'Reunião' },
+  enviar_orcamento: { cor: '#16A085', label: 'Enviar orçamento' },
+  revisar_proposta: { cor: '#B7950B', label: 'Revisar proposta' },
+  cobrar_decisao: { cor: '#7F8C8D', label: 'Cobrar decisão' },
+  pos_venda: { cor: '#2C3E50', label: 'Pós-venda' },
+  outro: { cor: '#95A5A6', label: 'Outro' },
+}
+
 export function classificarValorCliente(valor) {
   const v = valor || 0
   if (v >= 100000) return { medalha: '🥇', label: 'Ouro' }

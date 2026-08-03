@@ -1,9 +1,10 @@
-import { LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3, FileSpreadsheet, MapPin, TrendingDown } from 'lucide-react'
+import { LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3, FileSpreadsheet, MapPin, TrendingDown, CalendarDays } from 'lucide-react'
 
 const ITENS = [
   { key: 'visao_geral', label: 'Visão geral', icone: LayoutDashboard },
   { key: 'pipeline', label: 'Pipeline', icone: Filter },
   { key: 'funil', label: 'Funil', icone: TrendingDown },
+  { key: 'agenda', label: 'Agenda', icone: CalendarDays },
   { key: 'clientes', label: 'Clientes', icone: Users },
   { key: 'mapa', label: 'Mapa', icone: MapPin },
   { key: 'atividades', label: 'Atividades', icone: CalendarClock },

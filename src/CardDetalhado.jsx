@@ -307,7 +307,9 @@ function AbaOportunidade({ negocio, onAtualizado }) {
     try {
       await atualizarNegocio(negocio.id, {
         ...campos,
+        origem: campos.origem || null,
         temperatura: campos.temperatura || null,
+        proxima_acao: campos.proxima_acao || null,
         probabilidade_fechamento: campos.probabilidade_fechamento ? Number(campos.probabilidade_fechamento) : null,
         previsao_fechamento: campos.previsao_fechamento || null,
         proxima_acao_data: paraISOLocal(campos.proxima_acao_data),

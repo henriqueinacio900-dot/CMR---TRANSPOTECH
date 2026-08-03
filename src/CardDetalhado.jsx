@@ -293,7 +293,13 @@ function AbaOportunidade({ negocio, onAtualizado }) {
   async function salvarNovoValor() {
     setSalvando(true)
     try {
-      await atualizarNegocio(negocio.id, { valor_cotacao: novoValor ? Number(novoValor) : null })
+      const novoCotacao = novoValor ? Number(novoValor) : null
+      const dados = { valor_cotacao: novoCotacao }
+      // Se já está Ganha, recalcula o valor final mantendo o desconto já registrado
+      if (negocio.etapa === 'ganha' && novoCotacao !== null) {
+        dados.valor_final = novoCotacao - (negocio.desconto_valor || 0)
+      }
+      await atualizarNegocio(negocio.id, dados)
       onAtualizado()
       setEditandoValor(false)
     } finally {

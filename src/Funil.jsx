@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listarNegocios, listarDepartamentos, listarConsultores } from './api'
+import { listarNegocios, listarDepartamentos, listarConsultores, getMeuConsultor } from './api'
 import { ETAPAS, formatarMoeda } from './constants'
 
 const ETAPAS_FUNIL = ETAPAS.filter(e => e.key !== 'perdida')
@@ -12,12 +12,14 @@ export default function Funil() {
   const [deptSelecionado, setDeptSelecionado] = useState('todos')
   const [vendedorSelecionado, setVendedorSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
+  const [euMesmo, setEuMesmo] = useState(null)
 
   useEffect(() => {
-    Promise.all([listarNegocios(), listarDepartamentos(), listarConsultores()]).then(([n, d, c]) => {
+    Promise.all([listarNegocios(), listarDepartamentos(), listarConsultores(), getMeuConsultor()]).then(([n, d, c, eu]) => {
       setNegocios(n)
       setDepartamentos(d)
       setConsultores(c)
+      setEuMesmo(eu)
       setCarregando(false)
     })
   }, [])
@@ -46,16 +48,18 @@ export default function Funil() {
         Conversão geral (Prospecção → Ganha): <strong style={{ color: '#3b6d11' }}>{conversaoGeral.toFixed(1)}%</strong>
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <select value={deptSelecionado} onChange={e => setDeptSelecionado(e.target.value)} style={selectStyle}>
-          <option value="todos">Todos os departamentos</option>
-          {departamentos.map(d => <option key={d.id} value={d.nome}>{d.nome}</option>)}
-        </select>
-        <select value={vendedorSelecionado} onChange={e => setVendedorSelecionado(e.target.value)} style={selectStyle}>
-          <option value="todos">Todos os vendedores</option>
-          {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
-      </div>
+      {(euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor') && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          <select value={deptSelecionado} onChange={e => setDeptSelecionado(e.target.value)} style={selectStyle}>
+            <option value="todos">Todos os departamentos</option>
+            {departamentos.map(d => <option key={d.id} value={d.nome}>{d.nome}</option>)}
+          </select>
+          <select value={vendedorSelecionado} onChange={e => setVendedorSelecionado(e.target.value)} style={selectStyle}>
+            <option value="todos">Todos os vendedores</option>
+            {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         {linhas.map((l, i) => {

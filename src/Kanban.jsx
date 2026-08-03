@@ -128,6 +128,7 @@ export default function Kanban() {
             negocios={negocios}
             filtrados={filtrados}
             metrics={metrics}
+            euMesmo={euMesmo}
             departamentos={departamentos}
             consultores={consultores}
             deptSelecionado={deptSelecionado}
@@ -608,7 +609,10 @@ function MetaCard({ label, valor, cor }) {
   )
 }
 
-function FiltrosLinha({ departamentos, consultores, deptSelecionado, setDeptSelecionado, vendedorSelecionado, setVendedorSelecionado }) {
+function FiltrosLinha({ departamentos, consultores, deptSelecionado, setDeptSelecionado, vendedorSelecionado, setVendedorSelecionado, euMesmo }) {
+  const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
+  if (!ehAdmin) return null
+
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
       <select value={deptSelecionado} onChange={e => setDeptSelecionado(e.target.value)} style={selectStyle}>

@@ -8,12 +8,13 @@ const ETAPAS_INICIAIS = [
   { key: 'negociacao_decisao', label: 'Negociação/decisão' },
 ]
 
-export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
+export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado }) {
+  const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
   // Cliente
   const [razaoSocial, setRazaoSocial] = useState('')
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
-  const [departamentoId, setDepartamentoId] = useState(departamentos[0]?.id || '')
+  const [departamentoId, setDepartamentoId] = useState(euMesmo?.departamento_id || departamentos[0]?.id || '')
   const [clienteExistente, setClienteExistente] = useState(null)
   const [sugestoes, setSugestoes] = useState([])
   const [buscandoSugestao, setBuscandoSugestao] = useState(false)
@@ -196,11 +197,15 @@ export default function NovoNegocio({ departamentos, onFechar, onCriado }) {
               <input maxLength={2} value={estado} onChange={e => setEstado(e.target.value.toUpperCase())} style={inputStyle} />
             </Campo>
           </div>
-          <Campo label="Departamento">
-            <select required value={departamentoId} onChange={e => setDepartamentoId(e.target.value)} style={inputStyle}>
-              {departamentos.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
-            </select>
-          </Campo>
+          {ehAdmin ? (
+            <Campo label="Departamento">
+              <select required value={departamentoId} onChange={e => setDepartamentoId(e.target.value)} style={inputStyle}>
+                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+            </Campo>
+          ) : (
+            <input type="hidden" value={departamentoId} readOnly />
+          )}
         </Secao>
 
         <Secao titulo="Contato principal">

@@ -174,6 +174,7 @@ export default function Kanban() {
       {modalAberto && (
         <NovoNegocio
           departamentos={departamentos}
+          euMesmo={euMesmo}
           onFechar={() => setModalAberto(false)}
           onCriado={() => { setModalAberto(false); carregar() }}
         />

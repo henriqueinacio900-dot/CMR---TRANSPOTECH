@@ -311,7 +311,7 @@ export async function criarNegocioReativacao({ cliente_id, departamento_id, prod
   })
 }
 export async function listarConsultores() {
-  const { data, error } = await supabase.from('consultores').select('id, nome, perfil').order('nome')
+  const { data, error } = await supabase.from('consultores').select('id, nome, perfil, departamento_id').order('nome')
   if (error) { console.error(error); return [] }
   return data
 }

@@ -132,6 +132,7 @@ export default function Kanban() {
             euMesmo={euMesmo}
             departamentos={departamentos}
             consultores={consultores}
+            metas={metas}
             deptSelecionado={deptSelecionado}
             setDeptSelecionado={setDeptSelecionado}
             vendedorSelecionado={vendedorSelecionado}
@@ -457,8 +458,50 @@ function TopVendedores({ filtrados }) {
   )
 }
 
+function MetaPorDepartamento({ negocios, departamentos, consultores, metas }) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+
+  const linhas = departamentos.map(dept => {
+    const consultoresDept = consultores.filter(c => c.departamento_id === dept.id).map(c => c.id)
+    const metaDept = metas
+      .filter(m => consultoresDept.includes(m.consultor_id))
+      .reduce((s, m) => s + (m.valor_meta || 0), 0)
+    const ganhoDept = negocios
+      .filter(n => n.etapa === 'ganha' && n.departamento?.nome === dept.nome && new Date(n.atualizado_em) >= inicioMes)
+      .reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+    const faltante = Math.max(metaDept - ganhoDept, 0)
+    const percentual = metaDept > 0 ? Math.min(ganhoDept / metaDept * 100, 100) : 0
+    return { nome: dept.nome, metaDept, ganhoDept, faltante, percentual }
+  })
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Meta por departamento (mês atual)</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12 }}>
+        {linhas.map(l => (
+          <div key={l.nome} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{l.nome}</p>
+            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 8, marginBottom: 8 }}>
+              <div style={{ width: `${l.percentual}%`, background: l.percentual >= 100 ? '#3b6d11' : '#F77E01', height: 8, borderRadius: 4 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
+              <span>Ganho: <strong style={{ color: '#3b6d11' }}>{formatarMoeda(l.ganhoDept)}</strong></span>
+              <span>Meta: {l.metaDept > 0 ? formatarMoeda(l.metaDept) : '—'}</span>
+            </div>
+            <p style={{ fontSize: 12, color: l.faltante > 0 ? '#a32d2d' : '#3b6d11', margin: '6px 0 0', fontWeight: 600 }}>
+              {l.metaDept === 0 ? 'Nenhuma meta cadastrada' : l.faltante > 0 ? `Falta ${formatarMoeda(l.faltante)}` : 'Meta batida ✓'}
+            </p>
+          </div>
+        ))}
+        {linhas.length === 0 && <p style={{ color: '#999', fontSize: 13 }}>Nenhum departamento cadastrado.</p>}
+      </div>
+    </div>
+  )
+}
+
 function VisaoGeral(props) {
-  const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado } = props
+  const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado, departamentos, consultores, metas } = props
   const filtradosPeriodo = filtrados.filter(n => {
     if (!n.criado_em) return false
     const d = new Date(n.criado_em)
@@ -509,6 +552,8 @@ function VisaoGeral(props) {
         <KpiCard icone={Scale} label="Ticket médio (TKM)" valor={formatarMoeda(metrics.ticketMedio)} />
         <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} corIcone="#a32d2d" />
       </div>
+
+      <MetaPorDepartamento negocios={filtrados} departamentos={departamentos} consultores={consultores} metas={metas} />
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <PipelinePorEtapa filtrados={filtradosPeriodo} />

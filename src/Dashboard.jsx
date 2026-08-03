@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer as RRC, Legend as RLegend } from 'recharts'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal } from './api'
+import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal, listarDepartamentos } from './api'
 import { ETAPAS, classificarPci, formatarMoeda } from './constants'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [contatosMes, setContatosMes] = useState(0)
   const [config, setConfig] = useState({})
   const [consultores, setConsultores] = useState([])
+  const [departamentos, setDepartamentos] = useState([])
   const [metas, setMetas] = useState([])
   const [carregando, setCarregando] = useState(true)
 
@@ -29,14 +30,15 @@ export default function Dashboard() {
 
   async function carregarTudo() {
     setCarregando(true)
-    const [n, c, cfg, cons, m] = await Promise.all([
+    const [n, c, cfg, cons, deps, m] = await Promise.all([
       listarNegocios(), contarInteracoesMes(), listarConfiguracoesAutomacao(),
-      listarConsultores(), listarMetasMes(agora.getFullYear(), agora.getMonth() + 1),
+      listarConsultores(), listarDepartamentos(), listarMetasMes(agora.getFullYear(), agora.getMonth() + 1),
     ])
     setNegocios(n)
     setContatosMes(c)
     setConfig(cfg)
     setConsultores(cons)
+    setDepartamentos(deps)
     setMetas(m)
     setCarregando(false)
   }
@@ -228,6 +230,10 @@ export default function Dashboard() {
         <GraficoProdutividade negocios={negocios} metas={metas} />
       </Secao>
 
+      <Secao titulo="Meta por departamento (mês atual)">
+        <MetaPorDepartamentoTabela negocios={negocios} departamentos={departamentos} consultores={consultores} metas={metas} />
+      </Secao>
+
       <Secao titulo="Projeção de metas por vendedor">
         <QuadroProjecao negocios={negocios} consultores={consultores} metas={metas} />
       </Secao>
@@ -381,6 +387,51 @@ function GraficoProdutividade({ negocios, metas }) {
         <Line type="monotone" dataKey="faturamento" name="Faturamento" stroke="#F77E01" strokeWidth={2} dot={false} />
       </LineChart>
     </RRC>
+  )
+}
+
+function MetaPorDepartamentoTabela({ negocios, departamentos, consultores, metas }) {
+  const agora = new Date()
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+
+  const linhas = departamentos.map(dept => {
+    const consultoresDept = consultores.filter(c => c.departamento_id === dept.id).map(c => c.id)
+    const metaDept = metas
+      .filter(m => consultoresDept.includes(m.consultor_id))
+      .reduce((s, m) => s + (m.valor_meta || 0), 0)
+    const ganhoDept = negocios
+      .filter(n => n.etapa === 'ganha' && n.departamento?.nome === dept.nome && new Date(n.atualizado_em) >= inicioMes)
+      .reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+    const faltante = Math.max(metaDept - ganhoDept, 0)
+    return { nome: dept.nome, metaDept, ganhoDept, faltante }
+  })
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <thead>
+        <tr style={{ textAlign: 'left', color: '#777', borderBottom: '1px solid #eee' }}>
+          <th style={{ padding: '6px 8px' }}>Departamento</th>
+          <th style={{ padding: '6px 8px' }}>Meta</th>
+          <th style={{ padding: '6px 8px' }}>Ganho no mês</th>
+          <th style={{ padding: '6px 8px' }}>Falta pra bater</th>
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map(l => (
+          <tr key={l.nome} style={{ borderBottom: '1px solid #f2f2f2' }}>
+            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{l.nome}</td>
+            <td style={{ padding: '6px 8px' }}>{l.metaDept > 0 ? formatarMoeda(l.metaDept) : '—'}</td>
+            <td style={{ padding: '6px 8px', color: '#3b6d11', fontWeight: 600 }}>{formatarMoeda(l.ganhoDept)}</td>
+            <td style={{ padding: '6px 8px', color: l.faltante > 0 ? '#a32d2d' : '#3b6d11', fontWeight: 700 }}>
+              {l.metaDept === 0 ? '—' : l.faltante > 0 ? formatarMoeda(l.faltante) : 'Meta batida ✓'}
+            </td>
+          </tr>
+        ))}
+        {linhas.length === 0 && (
+          <tr><td colSpan={4} style={{ padding: 8, color: '#999' }}>Nenhum departamento cadastrado.</td></tr>
+        )}
+      </tbody>
+    </table>
   )
 }
 

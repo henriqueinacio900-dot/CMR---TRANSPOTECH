@@ -184,7 +184,7 @@ export default function Kanban() {
       )}
 
       {negocioAtual && (
-        <CardDetalhado negocio={negocioAtual} onFechar={() => setNegocioSelecionado(null)} onAtualizado={carregar} />
+        <CardDetalhado negocio={negocioAtual} euMesmo={euMesmo} onFechar={() => setNegocioSelecionado(null)} onAtualizado={carregar} />
       )}
     </div>
   )

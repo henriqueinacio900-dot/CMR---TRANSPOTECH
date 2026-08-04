@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
   listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha,
-  recalcularProximoPassoOrcamento,
+  recalcularProximoPassoOrcamento, excluirNegocio,
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
@@ -12,9 +12,23 @@ import PciForm from './PciForm.jsx'
 
 const ABAS_BASE = ['Resumo', 'Cliente e contatos', 'Oportunidade', 'PCI', 'Atividades', 'Histórico']
 
-export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
+export default function CardDetalhado({ negocio, euMesmo, onFechar, onAtualizado }) {
   const [aba, setAba] = useState('Resumo')
   const abas = ABAS_BASE
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
+  const ehAdmin = euMesmo?.perfil === 'administrador'
+
+  async function confirmarExclusao() {
+    setExcluindo(true)
+    try {
+      await excluirNegocio(negocio.id)
+      onAtualizado()
+      onFechar()
+    } finally {
+      setExcluindo(false)
+    }
+  }
 
   return (
     <div style={{
@@ -25,6 +39,19 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
         background: '#fff', borderRadius: 12, width: 640, maxWidth: '100%', maxHeight: '92vh',
         display: 'flex', flexDirection: 'column', boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
       }}>
+        {confirmandoExclusao ? (
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', background: '#FCEBEB' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#a32d2d', margin: '0 0 8px' }}>
+              Excluir "{negocio.cliente?.razao_social}" de vez? Essa ação não tem volta.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setConfirmandoExclusao(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+              <button onClick={confirmarExclusao} disabled={excluindo} style={{ ...botaoPequeno, background: '#a32d2d' }}>
+                {excluindo ? 'Excluindo...' : 'Sim, excluir'}
+              </button>
+            </div>
+          </div>
+        ) : (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>{negocio.cliente?.razao_social}</p>
@@ -32,8 +59,20 @@ export default function CardDetalhado({ negocio, onFechar, onAtualizado }) {
               {negocio.departamento?.nome} · {negocio.consultor?.nome}
             </p>
           </div>
-          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {ehAdmin && (
+              <button
+                onClick={() => setConfirmandoExclusao(true)}
+                title="Excluir esta oportunidade"
+                style={{ background: 'none', border: 'none', fontSize: 15, cursor: 'pointer', color: '#a32d2d' }}
+              >
+                🗑️
+              </button>
+            )}
+            <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
+          </div>
         </div>
+        )}
 
         <div style={{ display: 'flex', gap: 4, padding: '10px 20px 0', borderBottom: '1px solid #eee', overflowX: 'auto' }}>
           {abas.map(a => (

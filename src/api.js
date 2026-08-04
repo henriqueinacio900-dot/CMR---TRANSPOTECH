@@ -441,6 +441,11 @@ export async function salvarCoordenada({ chave, cidade, estado, latitude, longit
   if (error) console.error('Erro ao salvar coordenada:', error)
 }
 
+export async function excluirNegocio(id) {
+  const { error } = await supabase.from('negocios').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function sair() {
   return supabase.auth.signOut()
 }

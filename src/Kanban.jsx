@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon } from 'lucide-react'
 import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
@@ -500,6 +500,49 @@ function MetaPorDepartamento({ negocios, departamentos, consultores, metas }) {
   )
 }
 
+function GraficoCrescimentoDiario({ filtradosPeriodo, periodo }) {
+  const hoje = new Date()
+  const fimReal = periodo.fim > hoje ? hoje : periodo.fim
+
+  const ganhos = filtradosPeriodo
+    .filter(n => n.etapa === 'ganha')
+    .map(n => ({ data: new Date(n.atualizado_em), valor: n.valor_final || n.valor_cotacao || 0 }))
+    .sort((a, b) => a.data - b.data)
+
+  const dados = []
+  let acumulado = 0
+  const cursor = new Date(periodo.inicio)
+  while (cursor <= fimReal) {
+    const doDia = ganhos.filter(g =>
+      g.data.getFullYear() === cursor.getFullYear() &&
+      g.data.getMonth() === cursor.getMonth() &&
+      g.data.getDate() === cursor.getDate()
+    )
+    acumulado += doDia.reduce((s, g) => s + g.valor, 0)
+    dados.push({ dia: cursor.getDate() + '/' + (cursor.getMonth() + 1), acumulado: Math.round(acumulado) })
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, marginBottom: 20 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Crescimento diário (ganho acumulado no período)</p>
+      {dados.length === 0 ? (
+        <p style={{ fontSize: 12, color: '#999' }}>Sem dados nesse período.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={dados}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="dia" fontSize={11} />
+            <YAxis fontSize={11} tickFormatter={v => formatarMoeda(v)} width={90} />
+            <Tooltip formatter={v => formatarMoeda(v)} />
+            <Line type="monotone" dataKey="acumulado" name="Ganho acumulado" stroke="#F77E01" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
+}
+
 function VisaoGeral(props) {
   const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado, departamentos, consultores, metas } = props
   const filtradosPeriodo = filtrados.filter(n => {
@@ -563,6 +606,8 @@ function VisaoGeral(props) {
       <p style={{ fontSize: 11, color: '#999', margin: '-14px 0 20px' }}>
         Funil, temperatura e ranking acima consideram a Data 1º contato dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
       </p>
+
+      <GraficoCrescimentoDiario filtradosPeriodo={filtrados} periodo={periodo} />
 
       <FiltrosLinha {...props} />
 

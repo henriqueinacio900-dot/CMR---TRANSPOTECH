@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
-import { BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts'
+import {
+  BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon,
+  Search, Calendar, ChevronDown, CircleDollarSign, Disc, ShoppingCart, Wrench,
+} from 'lucide-react'
 import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
+import { TEMA, cardBase, cardElevadoBase } from './theme'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
@@ -20,6 +24,35 @@ import Agenda from './Agenda.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
+const LABEL_SECAO = {
+  visao_geral: 'Visão geral comercial', pipeline: 'Pipeline', funil: 'Funil de conversão', agenda: 'Agenda',
+  clientes: 'Clientes', mapa: 'Mapa de clientes', atividades: 'Atividades', reativacao: 'Reativação',
+  provisionado: 'Provisionado', relatorios: 'Relatórios',
+}
+
+const ESTILOS_GLOBAIS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+  .tp-card { transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease; }
+  .tp-card:hover { transform: translateY(-3px); border-color: rgba(255,137,0,0.45); box-shadow: 0 14px 34px rgba(0,0,0,0.45); }
+  .tp-item-menu:hover { background: rgba(255,121,0,0.10) !important; color: #F8FAFC !important; }
+  .tp-btn-primary { transition: box-shadow 200ms ease, transform 200ms ease; }
+  .tp-btn-primary:hover { box-shadow: 0 0 18px rgba(255,137,0,0.55); transform: translateY(-1px); }
+  .tp-input:focus { outline: none; border-color: rgba(255,137,0,0.5) !important; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 8px; }
+  .tp-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+  .tp-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+  @media (max-width: 980px) {
+    .tp-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .tp-grid-3 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width: 600px) {
+    .tp-grid-4 { grid-template-columns: 1fr; }
+    .tp-grid-3 { grid-template-columns: 1fr; }
+  }
+`
+
 export default function Kanban() {
   const [departamentos, setDepartamentos] = useState([])
   const [consultores, setConsultores] = useState([])
@@ -35,6 +68,7 @@ export default function Kanban() {
   const [metas, setMetas] = useState([])
   const [periodoChave, setPeriodoChave] = useState('este_mes')
   const [periodoPersonalizado, setPeriodoPersonalizado] = useState({ de: '', ate: '' })
+  const [menuUsuarioAberto, setMenuUsuarioAberto] = useState(false)
 
   async function carregar() {
     setCarregando(true)
@@ -69,54 +103,97 @@ export default function Kanban() {
   const periodo = useMemo(() => calcularPeriodo(periodoChave, periodoPersonalizado), [periodoChave, periodoPersonalizado])
   const metrics = useMemo(() => calcularMetricas(filtrados, periodo), [filtrados, periodo])
 
-  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+  if (carregando) {
+    return (
+      <div style={{ minHeight: '100vh', background: TEMA.fundoPrincipal, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: TEMA.textoSecundario, fontSize: 13 }}>Carregando...</p>
+      </div>
+    )
+  }
 
   const negocioAtual = negocioSelecionado ? (filtrados.find(n => n.id === negocioSelecionado) || negocios.find(n => n.id === negocioSelecionado)) : null
+  const iniciais = (euMesmo?.nome || '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
 
   return (
     <div style={{ display: 'flex' }}>
+      <style>{ESTILOS_GLOBAIS}</style>
       <Sidebar visao={visao} onMudarVisao={setVisao} />
 
       <div style={{
         flex: 1, minWidth: 0, minHeight: '100vh',
-        background: `linear-gradient(rgba(246,245,242,0.93), rgba(246,245,242,0.96)), url('/banner-transpotech.png')`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center top',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
+        background: `radial-gradient(circle at 15% 0%, #0d1c2e 0%, ${TEMA.fundoPrincipal} 45%), ${TEMA.fundoPrincipal}`,
       }}>
         <div style={{
-          background: '#fff', padding: '14px 24px', display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', gap: 16, borderBottom: '1px solid #eee', flexWrap: 'wrap',
+          background: `${TEMA.fundoSecundario}cc`, backdropFilter: 'blur(6px)',
+          padding: '14px 24px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 16, borderBottom: `1px solid ${TEMA.linhaInterna}`, flexWrap: 'wrap',
         }}>
-          <p style={{ fontWeight: 800, fontSize: 18, margin: 0, color: '#222' }}>CRM - PÓS VENDAS</p>
-          <input
-            placeholder="Buscar clientes, negócios..."
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            style={{ flex: 1, maxWidth: 380, padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13 }}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <AlertasCentral negocios={negocios} onAbrir={id => setNegocioSelecionado(id)} />
-            {euMesmo?.nome && (
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>{euMesmo.nome}</span>
-            )}
-            <button
-              onClick={() => sair()}
-              title="Sair"
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <p style={{ fontWeight: 800, fontSize: 20, margin: 0, color: TEMA.textoPrincipal, letterSpacing: 0.2 }}>CRM Pós-Vendas</p>
+            <div style={{ width: 1, height: 22, background: TEMA.linhaInterna }} />
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0, color: TEMA.laranjaLuminoso }}>{LABEL_SECAO[visao]}</p>
+              <div style={{ width: 28, height: 2, background: TEMA.laranja, borderRadius: 2, marginTop: 3, boxShadow: `0 0 6px ${TEMA.laranja}` }} />
+            </div>
+          </div>
+
+          <div style={{ position: 'relative', flex: 1, maxWidth: 380, minWidth: 180 }}>
+            <Search size={14} color={TEMA.textoDiscreto} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              className="tp-input"
+              placeholder="Buscar clientes, negócios..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
               style={{
-                background: 'none', color: '#999', border: '1px solid #ddd',
-                borderRadius: 8, padding: '9px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '100%', boxSizing: 'border-box', padding: '9px 12px 9px 34px', borderRadius: 8,
+                border: `1px solid ${TEMA.linhaInterna}`, background: 'rgba(255,255,255,0.03)', color: TEMA.textoPrincipal, fontSize: 13,
               }}
-            >
-              <LogOut size={16} />
-            </button>
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <SeletorPeriodo periodoChave={periodoChave} setPeriodoChave={setPeriodoChave} periodoPersonalizado={periodoPersonalizado} setPeriodoPersonalizado={setPeriodoPersonalizado} />
+            <AlertasCentral negocios={negocios} onAbrir={id => setNegocioSelecionado(id)} />
+
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuUsuarioAberto(!menuUsuarioAberto)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', background: `linear-gradient(135deg, ${TEMA.laranja}, ${TEMA.laranjaLuminoso})`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 700,
+                }}>
+                  {iniciais || 'U'}
+                </div>
+                {euMesmo?.nome && <span style={{ fontSize: 13, fontWeight: 600, color: TEMA.textoPrincipal }}>{euMesmo.nome.split(' ')[0]}</span>}
+                <ChevronDown size={14} color={TEMA.textoSecundario} />
+              </button>
+              {menuUsuarioAberto && (
+                <div style={{
+                  position: 'absolute', top: '110%', right: 0, background: TEMA.cardElevado, border: `1px solid ${TEMA.borda}`,
+                  borderRadius: 8, padding: 6, minWidth: 130, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 20,
+                }}>
+                  <button
+                    onClick={() => sair()}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none',
+                      color: TEMA.textoSecundario, fontSize: 13, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <LogOut size={14} /> Sair
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
+              className="tp-btn-primary"
               onClick={() => setModalAberto(true)}
               style={{
-                background: CORES_MARCA.laranja, color: '#fff', border: 'none',
-                borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                background: `linear-gradient(135deg, ${TEMA.laranja}, ${TEMA.laranjaLuminoso})`, color: '#fff', border: 'none',
+                borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                boxShadow: '0 4px 14px rgba(255,121,0,0.3)',
               }}
             >
               + Nova oportunidade
@@ -185,6 +262,32 @@ export default function Kanban() {
 
       {negocioAtual && (
         <CardDetalhado negocio={negocioAtual} euMesmo={euMesmo} onFechar={() => setNegocioSelecionado(null)} onAtualizado={carregar} />
+      )}
+    </div>
+  )
+}
+
+function SeletorPeriodo({ periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <Calendar size={14} color={TEMA.textoDiscreto} />
+      <select
+        value={periodoChave}
+        onChange={e => setPeriodoChave(e.target.value)}
+        style={{
+          background: 'rgba(255,255,255,0.03)', color: TEMA.textoPrincipal, border: `1px solid ${TEMA.linhaInterna}`,
+          borderRadius: 8, padding: '8px 10px', fontSize: 12,
+        }}
+      >
+        {OPCOES_PERIODO.map(o => <option key={o.key} value={o.key} style={{ color: '#111' }}>{o.label}</option>)}
+      </select>
+      {periodoChave === 'personalizado' && (
+        <>
+          <input type="date" value={periodoPersonalizado.de} onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, de: e.target.value })}
+            style={{ background: 'rgba(255,255,255,0.03)', color: TEMA.textoPrincipal, border: `1px solid ${TEMA.linhaInterna}`, borderRadius: 8, padding: '8px 8px', fontSize: 12 }} />
+          <input type="date" value={periodoPersonalizado.ate} onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, ate: e.target.value })}
+            style={{ background: 'rgba(255,255,255,0.03)', color: TEMA.textoPrincipal, border: `1px solid ${TEMA.linhaInterna}`, borderRadius: 8, padding: '8px 8px', fontSize: 12 }} />
+        </>
       )}
     </div>
   )
@@ -269,7 +372,7 @@ function calcularMetricas(negocios, periodo) {
   }
 }
 
-const CORES_ROSCA = { quente: '#C1440E', morno: '#C68A1E', frio: '#2F6FB0' }
+const CORES_ROSCA = { quente: '#FF5A3D', morno: TEMA.ambar, frio: TEMA.azulAnalitico }
 const LABEL_ROSCA = { quente: 'Quente', morno: 'Morno', frio: 'Frio' }
 
 function GraficoTemperatura({ filtrados }) {
@@ -285,37 +388,42 @@ function GraficoTemperatura({ filtrados }) {
   const totalNegocios = emNegociacao.length
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>Temperatura das negociações</p>
+    <div className="tp-card" style={{ ...cardBase, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: TEMA.textoPrincipal }}>Temperatura das negociações</p>
       {dados.length === 0 ? (
-        <p style={{ fontSize: 12, color: '#999' }}>Nenhum negócio em negociação agora.</p>
+        <p style={{ fontSize: 12, color: TEMA.textoDiscreto }}>Nenhum negócio em negociação agora.</p>
       ) : (
         <>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', filter: 'drop-shadow(0 0 10px rgba(255,90,61,0.15))' }}>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie
-                  data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={2}
+                  data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={3}
                   onClick={d => setTempAberta(d.chave)}
                   style={{ cursor: 'pointer' }}
+                  stroke={TEMA.fundoSecundario}
+                  strokeWidth={2}
                 >
                   {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
                 </Pie>
-                <Tooltip formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]} />
+                <Tooltip
+                  formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]}
+                  contentStyle={{ background: TEMA.cardElevado, border: `1px solid ${TEMA.borda}`, borderRadius: 8, color: TEMA.textoPrincipal }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 30,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
             }}>
-              <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#222' }}>{totalNegocios}</p>
-              <p style={{ fontSize: 11, color: '#999', margin: 0 }}>negócios</p>
+              <p style={{ fontSize: 24, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>{totalNegocios}</p>
+              <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: 0 }}>negócios</p>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: 11, color: '#666', marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: 11, color: TEMA.textoSecundario, marginTop: 4 }}>
             {dados.map(d => (
               <span key={d.chave} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block' }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block', boxShadow: `0 0 5px ${CORES_ROSCA[d.chave]}` }} />
                 {d.nome}
               </span>
             ))}
@@ -388,31 +496,33 @@ function PipelinePorEtapa({ filtrados }) {
   const totalNegocios = linhas.reduce((s, l) => s + l.qtd, 0)
 
   function corBarra(chave) {
-    if (chave === 'ganha') return '#3b6d11'
-    if (chave === 'perdida') return '#a32d2d'
-    return '#7CA6D9'
+    if (chave === 'ganha') return TEMA.verde
+    if (chave === 'perdida') return TEMA.vermelho
+    if (chave === 'contato_realizado') return TEMA.textoDiscreto
+    if (chave === 'orcamento_enviado') return TEMA.azulAnalitico
+    return '#5B8DEF'
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Pipeline por etapa</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="tp-card" style={{ ...cardBase, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px', color: TEMA.textoPrincipal }}>Pipeline por etapa</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {linhas.map(l => (
           <div key={l.key}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginBottom: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: TEMA.textoSecundario, marginBottom: 3 }}>
               <span>{l.label}</span>
               <span>{l.qtd} · {formatarMoeda(l.valor)}</span>
             </div>
-            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 8 }}>
+            <div style={{ background: 'rgba(148,163,184,0.15)', borderRadius: 4, height: 7 }}>
               <div style={{
                 width: `${(l.qtd / maiorQtd) * 100}%`, background: corBarra(l.key),
-                height: 8, borderRadius: 4, minWidth: l.qtd > 0 ? 4 : 0,
+                height: 7, borderRadius: 4, minWidth: l.qtd > 0 ? 4 : 0, transition: 'width 400ms ease',
               }} />
             </div>
           </div>
         ))}
       </div>
-      <p style={{ fontSize: 11, color: '#999', marginTop: 10, marginBottom: 0 }}>
+      <p style={{ fontSize: 11, color: TEMA.textoDiscreto, marginTop: 12, marginBottom: 0 }}>
         Total pipeline: {totalNegocios} negócio{totalNegocios !== 1 ? 's' : ''}
       </p>
     </div>
@@ -435,28 +545,44 @@ function TopVendedores({ filtrados }) {
   const maiorGanho = Math.max(1, ...lista.map(l => l.ganho))
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, flex: '1 0 280px' }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Top vendedores</p>
-      {lista.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem dados ainda.</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {lista.map((l, i) => (
-          <div key={l.nome}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-              <span style={{ fontWeight: 600 }}>{i + 1} {l.nome}</span>
-              <span>
-                <strong>{formatarMoeda(l.ganho)}</strong>
-                <span style={{ color: '#999' }}> · {l.conversao.toFixed(1)}%</span>
-              </span>
+    <div className="tp-card" style={{ ...cardBase, flex: '1 0 280px' }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px', color: TEMA.textoPrincipal }}>Top vendedores</p>
+      {lista.length === 0 && <p style={{ fontSize: 12, color: TEMA.textoDiscreto }}>Sem dados ainda.</p>}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {lista.map((l, i) => {
+          const iniciais = l.nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+          return (
+            <div key={l.nome} style={{ padding: '9px 0', borderBottom: i < lista.length - 1 ? `1px solid ${TEMA.linhaInterna}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                <span style={{ fontSize: 11, color: TEMA.textoDiscreto, width: 14 }}>{i + 1}</span>
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                  background: `linear-gradient(135deg, ${TEMA.laranja}, ${TEMA.laranjaLuminoso})`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, fontWeight: 700,
+                }}>
+                  {iniciais}
+                </div>
+                <span style={{ fontWeight: 600, fontSize: 12, color: TEMA.textoPrincipal, flex: 1 }}>{l.nome}</span>
+                <span style={{ fontSize: 12, textAlign: 'right' }}>
+                  <strong style={{ color: TEMA.textoPrincipal }}>{formatarMoeda(l.ganho)}</strong>
+                  <span style={{ color: TEMA.textoDiscreto }}> · {l.conversao.toFixed(1)}%</span>
+                </span>
+              </div>
+              <div style={{ background: 'rgba(148,163,184,0.15)', borderRadius: 4, height: 6, marginLeft: 30 }}>
+                <div style={{
+                  width: `${(l.ganho / maiorGanho) * 100}%`, background: `linear-gradient(90deg, ${TEMA.laranja}, ${TEMA.laranjaLuminoso})`,
+                  height: 6, borderRadius: 4, boxShadow: `0 0 6px ${TEMA.laranja}`,
+                }} />
+              </div>
             </div>
-            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 6 }}>
-              <div style={{ width: `${(l.ganho / maiorGanho) * 100}%`, background: '#F77E01', height: 6, borderRadius: 4 }} />
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
+
+const ICONE_DEPARTAMENTO = { 'Pneus': Disc, 'Pós-vendas': Wrench, 'Varejo': ShoppingCart }
 
 function MetaPorDepartamento({ negocios, departamentos, consultores, metas }) {
   const agora = new Date()
@@ -477,24 +603,36 @@ function MetaPorDepartamento({ negocios, departamentos, consultores, metas }) {
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Meta por departamento (mês atual)</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12 }}>
-        {linhas.map(l => (
-          <div key={l.nome} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{l.nome}</p>
-            <div style={{ background: '#f2f2f2', borderRadius: 4, height: 8, marginBottom: 8 }}>
-              <div style={{ width: `${l.percentual}%`, background: l.percentual >= 100 ? '#3b6d11' : '#F77E01', height: 8, borderRadius: 4 }} />
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px', color: TEMA.textoPrincipal }}>Performance comercial por departamento (mês atual)</p>
+      <div className="tp-grid-3">
+        {linhas.map(l => {
+          const Icone = ICONE_DEPARTAMENTO[l.nome] || Scale
+          return (
+            <div key={l.nome} className="tp-card" style={cardBase}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ background: 'rgba(255,137,0,0.10)', border: '1px solid rgba(255,137,0,0.25)', borderRadius: 8, padding: 6, display: 'flex' }}>
+                  <Icone size={15} color={TEMA.laranjaLuminoso} />
+                </div>
+                <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: TEMA.textoPrincipal }}>{l.nome}</p>
+              </div>
+              <div style={{ background: 'rgba(148,163,184,0.15)', borderRadius: 8, height: 8, marginBottom: 10, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${l.percentual}%`, height: 8, borderRadius: 8, transition: 'width 400ms ease',
+                  background: l.percentual >= 100 ? TEMA.verde : `linear-gradient(90deg, ${TEMA.laranja}, ${TEMA.laranjaLuminoso})`,
+                  boxShadow: l.percentual > 0 ? `0 0 8px ${l.percentual >= 100 ? TEMA.verde : TEMA.laranja}` : 'none',
+                }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TEMA.textoSecundario }}>
+                <span>Ganho: <strong style={{ color: TEMA.textoPrincipal }}>{formatarMoeda(l.ganhoDept)}</strong></span>
+                <span>Meta: {l.metaDept > 0 ? formatarMoeda(l.metaDept) : '—'}</span>
+              </div>
+              <p style={{ fontSize: 12, color: l.faltante > 0 && l.metaDept > 0 ? TEMA.vermelho : TEMA.verde, margin: '8px 0 0', fontWeight: 600 }}>
+                {l.metaDept === 0 ? 'Nenhuma meta cadastrada' : l.faltante > 0 ? `Falta: ${formatarMoeda(l.faltante)}` : 'Meta batida ✓'}
+              </p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
-              <span>Ganho: <strong style={{ color: '#3b6d11' }}>{formatarMoeda(l.ganhoDept)}</strong></span>
-              <span>Meta: {l.metaDept > 0 ? formatarMoeda(l.metaDept) : '—'}</span>
-            </div>
-            <p style={{ fontSize: 12, color: l.faltante > 0 ? '#a32d2d' : '#3b6d11', margin: '6px 0 0', fontWeight: 600 }}>
-              {l.metaDept === 0 ? 'Nenhuma meta cadastrada' : l.faltante > 0 ? `Falta ${formatarMoeda(l.faltante)}` : 'Meta batida ✓'}
-            </p>
-          </div>
-        ))}
-        {linhas.length === 0 && <p style={{ color: '#999', fontSize: 13 }}>Nenhum departamento cadastrado.</p>}
+          )
+        })}
+        {linhas.length === 0 && <p style={{ color: TEMA.textoDiscreto, fontSize: 13 }}>Nenhum departamento cadastrado.</p>}
       </div>
     </div>
   )
@@ -524,19 +662,35 @@ function GraficoCrescimentoDiario({ filtradosPeriodo, periodo }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: '#333' }}>Crescimento diário (ganho acumulado no período)</p>
+    <div className="tp-card" style={{ ...cardBase, marginBottom: 20 }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px', color: TEMA.textoPrincipal }}>Crescimento diário (ganho acumulado no período)</p>
       {dados.length === 0 ? (
-        <p style={{ fontSize: 12, color: '#999' }}>Sem dados nesse período.</p>
+        <p style={{ fontSize: 12, color: TEMA.textoDiscreto }}>Sem dados nesse período.</p>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={dados}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="dia" fontSize={11} />
-            <YAxis fontSize={11} tickFormatter={v => formatarMoeda(v)} width={90} />
-            <Tooltip formatter={v => formatarMoeda(v)} />
-            <Line type="monotone" dataKey="acumulado" name="Ganho acumulado" stroke="#F77E01" strokeWidth={2} dot={false} />
-          </LineChart>
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={dados}>
+            <defs>
+              <linearGradient id="gradCrescimento" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={TEMA.laranja} stopOpacity={0.45} />
+                <stop offset="95%" stopColor={TEMA.laranja} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={TEMA.linhaInterna} />
+            <XAxis dataKey="dia" fontSize={11} stroke={TEMA.textoDiscreto} tick={{ fill: TEMA.textoDiscreto }} />
+            <YAxis fontSize={11} tickFormatter={v => formatarMoeda(v)} width={95} stroke={TEMA.textoDiscreto} tick={{ fill: TEMA.textoDiscreto }} />
+            <Tooltip
+              formatter={v => formatarMoeda(v)}
+              contentStyle={{ background: TEMA.cardElevado, border: `1px solid ${TEMA.borda}`, borderRadius: 8, color: TEMA.textoPrincipal }}
+              labelStyle={{ color: TEMA.textoSecundario }}
+            />
+            <Area
+              type="monotone" dataKey="acumulado" name="Ganho acumulado"
+              stroke={TEMA.laranjaLuminoso} strokeWidth={2.5} fill="url(#gradCrescimento)"
+              dot={{ r: 3, fill: TEMA.laranjaLuminoso, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: TEMA.laranjaLuminoso, stroke: '#fff', strokeWidth: 1 }}
+              animationDuration={600}
+            />
+          </AreaChart>
         </ResponsiveContainer>
       )}
     </div>
@@ -564,36 +718,11 @@ function VisaoGeral(props) {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#333' }}>Visão geral comercial</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={periodoChave} onChange={e => setPeriodoChave(e.target.value)} style={selectStyle}>
-            {OPCOES_PERIODO.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-          {periodoChave === 'personalizado' && (
-            <>
-              <input
-                type="date" value={periodoPersonalizado.de}
-                onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, de: e.target.value })}
-                style={selectStyle}
-              />
-              <span style={{ fontSize: 12, color: '#999' }}>até</span>
-              <input
-                type="date" value={periodoPersonalizado.ate}
-                onChange={e => setPeriodoPersonalizado({ ...periodoPersonalizado, ate: e.target.value })}
-                style={selectStyle}
-              />
-            </>
-          )}
-
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiCard icone={Trophy} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} corIcone="#3b6d11" />
+      <div className="tp-grid-4" style={{ marginBottom: 20 }}>
+        <KpiCard icone={CircleDollarSign} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} />
         <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
         <KpiCard icone={Scale} label="Ticket médio (TKM)" valor={formatarMoeda(metrics.ticketMedio)} />
-        <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} corIcone="#a32d2d" />
+        <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} negativo />
       </div>
 
       <MetaPorDepartamento negocios={filtrados} departamentos={departamentos} consultores={consultores} metas={metas} />
@@ -603,7 +732,7 @@ function VisaoGeral(props) {
         <GraficoTemperatura filtrados={filtradosPeriodo} />
         <TopVendedores filtrados={filtradosPeriodo} />
       </div>
-      <p style={{ fontSize: 11, color: '#999', margin: '-14px 0 20px' }}>
+      <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: '-14px 0 20px' }}>
         Funil, temperatura e ranking acima consideram a Data 1º contato dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
       </p>
 
@@ -917,19 +1046,24 @@ function ListaRetorno({ negocios, onAtualizado }) {
   )
 }
 
-function KpiCard({ icone: Icone, label, valor, variacao, corIcone, sufixoVariacao = '%' }) {
+function KpiCard({ icone: Icone, label, valor, variacao, negativo, sufixoVariacao = '%' }) {
+  const corDestaque = negativo ? TEMA.vermelho : TEMA.laranjaLuminoso
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16 }}>
+    <div className="tp-card" style={{ ...cardBase, position: 'relative', overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <p style={{ fontSize: 12, color: '#777', margin: '0 0 6px' }}>{label}</p>
-        <div style={{ background: '#FFF3E8', borderRadius: 6, padding: 6 }}>
-          <Icone size={16} color={corIcone || '#F77E01'} />
+        <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</p>
+        <div style={{
+          background: `rgba(255,137,0,0.10)`, border: `1px solid rgba(255,137,0,0.25)`,
+          borderRadius: 8, padding: 7, display: 'flex',
+        }}>
+          <Icone size={16} color={corDestaque} />
         </div>
       </div>
-      <p style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{valor}</p>
+      <p style={{ fontSize: 28, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>{valor}</p>
       {variacao !== null && variacao !== undefined && (
-        <p style={{ fontSize: 11, margin: '4px 0 0', color: variacao >= 0 ? '#3b6d11' : '#a32d2d' }}>
-          {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao).toFixed(1)}{sufixoVariacao} vs mês anterior
+        <p style={{ fontSize: 12, margin: '6px 0 0', color: variacao >= 0 ? TEMA.verde : TEMA.vermelho, fontWeight: 600 }}>
+          {variacao >= 0 ? '▲' : '▼'} {Math.abs(variacao).toFixed(1)}{sufixoVariacao}
+          <span style={{ color: TEMA.textoDiscreto, fontWeight: 400 }}> vs. mês anterior</span>
         </p>
       )}
     </div>

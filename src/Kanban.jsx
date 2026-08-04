@@ -825,7 +825,8 @@ function CardNegocio({ negocio, onClick }) {
     : CORES_TEMPERATURA[negocio.temperatura]
   const notaPci = negocio.avaliacoes_pci?.[0]?.nota_total
   const pci = notaPci !== undefined ? classificarPci(notaPci) : null
-  const atrasado = negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
+  const atrasado = negocio.etapa !== 'ganha' && negocio.etapa !== 'perdida'
+    && negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
   const corBorda = negocio.urgencia === 'alta' ? '#F77E01' : (pci ? pci.cor : '#ddd')
   const classificacao = classificarValorCliente(negocio.valor_cotacao || negocio.valor_final)
   const diasAberto = negocio.criado_em ? Math.floor((Date.now() - new Date(negocio.criado_em)) / 86400000) : 0

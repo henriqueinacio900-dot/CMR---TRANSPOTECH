@@ -290,7 +290,7 @@ function PainelDesconto({ negocios }) {
 
 function TabelaDesconto({ titulo, dados }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222' }}>
       <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{titulo}</p>
       {dados.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem vendas ganhas esse mês ainda.</p>}
       {dados.map(d => (
@@ -538,7 +538,7 @@ function RankingTop5({ titulo, negocios, etapa, mostrarValor }) {
     .slice(0, 5)
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222' }}>
       <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{titulo}</p>
       {lista.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem dados ainda.</p>}
       {lista.map((l, i) => (

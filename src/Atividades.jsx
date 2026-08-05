@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TEMA } from './theme'
 import { listarAtividadesRecentes } from './api'
 
 const LABEL_TIPO = {
@@ -13,14 +14,14 @@ export default function Atividades() {
     listarAtividadesRecentes(50).then(a => { setAtividades(a); setCarregando(false) })
   }, [])
 
-  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+  if (carregando) return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Carregando...</p>
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>Atividades recentes</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {atividades.map(a => (
-          <div key={a.id} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: 12 }}>
+          <div key={a.id} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 8, padding: 12, color: '#222' }}>
             <p style={{ margin: 0, fontSize: 13 }}>
               <strong>{LABEL_TIPO[a.tipo] || a.tipo}</strong> com <strong>{a.negocio?.cliente?.razao_social}</strong>
             </p>

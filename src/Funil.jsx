@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TEMA } from './theme'
 import { listarNegocios, listarDepartamentos, listarConsultores, getMeuConsultor } from './api'
 import { ETAPAS, formatarMoeda } from './constants'
 
@@ -24,7 +25,7 @@ export default function Funil() {
     })
   }, [])
 
-  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+  if (carregando) return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Carregando...</p>
 
   const filtrados = negocios.filter(n => {
     if (deptSelecionado !== 'todos' && n.departamento?.nome !== deptSelecionado) return false
@@ -42,7 +43,7 @@ export default function Funil() {
   const conversaoGeral = primeiraQtd > 0 ? ((linhas[linhas.length - 1]?.qtd || 0) / primeiraQtd * 100) : 0
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Funil de conversão</p>
       <p style={{ fontSize: 13, color: '#777', margin: '0 0 16px' }}>
         Conversão geral (Prospecção → Ganha): <strong style={{ color: '#3b6d11' }}>{conversaoGeral.toFixed(1)}%</strong>
@@ -95,5 +96,5 @@ export default function Funil() {
 }
 
 const selectStyle = {
-  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, background: '#fff',
+  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, background: '#fff', color: '#222',
 }

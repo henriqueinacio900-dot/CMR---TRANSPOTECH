@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TEMA } from './theme'
 import { listarNegocios, listarDepartamentos, listarConsultores, getMeuConsultor } from './api'
 import { CORES_AGENDA, PROXIMAS_ACOES, formatarMoeda } from './constants'
 
@@ -24,7 +25,7 @@ export default function Agenda({ onAbrir }) {
     })
   }, [])
 
-  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+  if (carregando) return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Carregando...</p>
 
   const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
 
@@ -54,7 +55,7 @@ export default function Agenda({ onAbrir }) {
   const hoje = new Date()
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Agenda</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -120,7 +121,7 @@ export default function Agenda({ onAbrir }) {
                             fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}
                         >
-                          {n.cliente?.razao_social}
+                          {n.consultor?.nome || 'Sem consultor'}
                         </button>
                       )
                     })}
@@ -139,9 +140,9 @@ export default function Agenda({ onAbrir }) {
 }
 
 const botaoNav = {
-  background: '#fff', border: '1px solid #ddd', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontSize: 12,
+  background: '#fff', border: '1px solid #ddd', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontSize: 12, color: '#222',
 }
 
 const selectStyle = {
-  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, background: '#fff',
+  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, background: '#fff', color: '#222',
 }

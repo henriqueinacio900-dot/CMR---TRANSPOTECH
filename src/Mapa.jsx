@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { listarTodosClientes, listarNegocios, buscarCoordenadasCache, salvarCoordenada } from './api'
+import { TEMA } from './theme'
 import { formatarMoeda } from './constants'
 
 function AjustarZoom({ pontos }) {
@@ -101,13 +102,13 @@ export default function Mapa() {
   const maiorGanho = Math.max(1, ...cidades.map(c => c.ganho))
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Clientes no mapa</p>
-      <p style={{ fontSize: 13, color: '#777', margin: '0 0 16px' }}>
+      <p style={{ fontSize: 13, color: TEMA.textoSecundario, margin: '0 0 16px' }}>
         {cidades.length} cidade(s) com cliente cadastrado. O tamanho do círculo representa o valor ganho naquela cidade — clique pra ver os clientes.
       </p>
 
-      {carregando && <p style={{ color: '#999', fontSize: 13 }}>{progresso || 'Carregando...'}</p>}
+      {carregando && <p style={{ color: TEMA.textoSecundario, fontSize: 13 }}>{progresso || 'Carregando...'}</p>}
 
       {!carregando && (
         <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #eee' }}>
@@ -156,7 +157,7 @@ function ModalClientesCidade({ cidade, onFechar }) {
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 360, maxWidth: '90vw',
         background: '#fff', zIndex: 61, boxShadow: '-4px 0 20px rgba(0,0,0,0.15)',
-        padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column',
+        padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', color: '#222',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TEMA } from './theme'
 import * as XLSX from 'xlsx'
 import { listarNegocios, listarMetasMes } from './api'
 import { formatarMoeda } from './constants'
@@ -18,7 +19,7 @@ export default function Provisionado() {
     })
   }, [])
 
-  if (carregando) return <p style={{ padding: 24 }}>Carregando...</p>
+  if (carregando) return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Carregando...</p>
 
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
   const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
@@ -65,7 +66,7 @@ export default function Provisionado() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Provisionado — {agora.toLocaleDateString('pt-BR')}</p>
         <button onClick={exportarExcel} style={botaoExportar}>⬇ Baixar Excel</button>
@@ -109,7 +110,7 @@ export default function Provisionado() {
 
 function Tabela({ titulo, itens, total, totalLabel }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14 }}>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222' }}>
       <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', background: '#F1E9DD', padding: '6px 8px', borderRadius: 6 }}>{titulo}</p>
       <div style={{ maxHeight: 260, overflowY: 'auto' }}>
         {itens.map((it, i) => (

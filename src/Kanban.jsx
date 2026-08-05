@@ -127,6 +127,7 @@ export default function Kanban() {
           background: `${TEMA.fundoSecundario}cc`, backdropFilter: 'blur(6px)',
           padding: '14px 24px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 16, borderBottom: `1px solid ${TEMA.linhaInterna}`, flexWrap: 'wrap',
+          position: 'relative', zIndex: 100,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <p style={{ fontWeight: 800, fontSize: 20, margin: 0, color: TEMA.textoPrincipal, letterSpacing: 0.2 }}>CRM Pós-Vendas</p>

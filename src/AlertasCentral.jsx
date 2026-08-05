@@ -87,7 +87,7 @@ export default function AlertasCentral({ negocios, onAbrir }) {
         <div style={{
           position: 'absolute', top: '110%', right: 0, background: '#fff', borderRadius: 10,
           boxShadow: '0 4px 16px rgba(0,0,0,0.15)', width: 320, maxHeight: 400, overflowY: 'auto',
-          padding: 10, zIndex: 40,
+          padding: 10, zIndex: 500,
         }}>
           <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#333' }}>Notificações</p>
           {alertas.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Nada pendente agora.</p>}

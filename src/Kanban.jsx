@@ -384,13 +384,12 @@ function GraficoTemperatura({ filtrados }) {
       valor: emNegociacao.filter(n => n.temperatura === t).reduce((s, n) => s + (n.valor_cotacao || 0), 0),
       qtd: emNegociacao.filter(n => n.temperatura === t).length,
     }))
-    .filter(d => d.qtd > 0)
   const totalNegocios = emNegociacao.length
 
   return (
     <div className="tp-card" style={{ ...cardBase, flex: '1 0 280px' }}>
       <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: TEMA.textoPrincipal }}>Temperatura das negociações</p>
-      {dados.length === 0 ? (
+      {totalNegocios === 0 ? (
         <p style={{ fontSize: 12, color: TEMA.textoDiscreto }}>Nenhum negócio em negociação agora.</p>
       ) : (
         <>
@@ -398,13 +397,13 @@ function GraficoTemperatura({ filtrados }) {
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie
-                  data={dados} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={3}
+                  data={dados.filter(d => d.qtd > 0)} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={3}
                   onClick={d => setTempAberta(d.chave)}
                   style={{ cursor: 'pointer' }}
                   stroke={TEMA.fundoSecundario}
                   strokeWidth={2}
                 >
-                  {dados.map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
+                  {dados.filter(d => d.qtd > 0).map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
                 </Pie>
                 <Tooltip
                   formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]}
@@ -424,7 +423,7 @@ function GraficoTemperatura({ filtrados }) {
             {dados.map(d => (
               <span key={d.chave} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block', boxShadow: `0 0 5px ${CORES_ROSCA[d.chave]}` }} />
-                {d.nome}
+                {d.nome} ({d.qtd})
               </span>
             ))}
           </div>

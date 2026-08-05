@@ -4,6 +4,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal, listarDepartamentos } from './api'
 import { ETAPAS, classificarPci, formatarMoeda } from './constants'
+import { TEMA } from './theme'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 const ETAPA_PARA_CONFIG = {
@@ -175,9 +176,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Indicadores</p>
+        <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>Indicadores</p>
         <button onClick={gerarRelatorioPDF} style={botaoPdf}>⬇ Baixar relatório PDF</button>
       </div>
 

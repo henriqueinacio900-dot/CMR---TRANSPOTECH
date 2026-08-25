@@ -46,7 +46,7 @@ export default function Provisionado() {
   const negociacao = negociosFiltrados.filter(n => n.etapa === 'negociacao_decisao')
 
   const meta = metasFiltradas.reduce((s, m) => s + (m.valor_meta || 0), 0)
-  const totalFaturado = faturados.reduce((s, n) => s + (n.valor_final || 0), 0)
+  const totalFaturado = faturados.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const totalPrevisto = previstos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const totalProximoMes = aprovadosProximoMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const totalPrevistoMes = totalFaturado + totalPrevisto
@@ -62,7 +62,7 @@ export default function Provisionado() {
     linhas.push(['FATURADO', totalFaturado])
     linhas.push([])
     linhas.push(['Faturado no mês (detalhado)'])
-    faturados.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || 0]))
+    faturados.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
     linhas.push([])
     linhas.push(['Aprovado próximo mês'])
     aprovadosProximoMes.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
@@ -114,7 +114,7 @@ export default function Provisionado() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 16 }}>
         <Tabela
           titulo="Faturado no mês"
-          itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || 0 }))}
+          itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
           total={totalFaturado}
           totalLabel="Total faturado"
         />

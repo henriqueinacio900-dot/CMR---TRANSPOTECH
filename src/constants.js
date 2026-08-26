@@ -9,6 +9,7 @@ export const CORES_TEMPERATURA = {
 }
 
 export const CORES_PERDIDA = { grad: 'linear-gradient(135deg, #F6C6C6, #D9534F)', titulo: '#4A0A0A', sub: '#7A1F1F' }
+export const CORES_FATURAMENTO_PROXIMO = { grad: 'linear-gradient(135deg, #DFF5D8, #A8DDA0)', titulo: '#1B3D0A', sub: '#2E5C17' }
 
 export const CORES_GANHA = {
   faturado: { grad: 'linear-gradient(135deg, #B9E6A0, #5CAF3B)', titulo: '#1B3D0A', sub: '#2E5C17' },
@@ -21,6 +22,7 @@ export const ETAPAS = [
   { key: 'contato_realizado', label: 'Contato realizado' },
   { key: 'orcamento_enviado', label: 'Orçamento enviado' },
   { key: 'negociacao_decisao', label: 'Negociação/decisão' },
+  { key: 'faturamento_proximo_mes', label: 'Faturamento próximo mês' },
   { key: 'ganha', label: 'Ganha' },
   { key: 'perdida', label: 'Perdida' },
 ]

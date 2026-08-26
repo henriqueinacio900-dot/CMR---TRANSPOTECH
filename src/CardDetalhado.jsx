@@ -534,6 +534,19 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     if (novaEtapa === 'perdida') { setMostrarPerdida(true); return }
     if (novaEtapa === 'ganha') { setMostrarGanha(true); return }
 
+    // "Faturamento próximo mês" é só lembrete — não exige próxima ação pra mover
+    if (novaEtapa === 'faturamento_proximo_mes') {
+      setSalvando(true)
+      try {
+        await moverEtapa(negocio.id, novaEtapa)
+        onAtualizado()
+        onFechar()
+      } finally {
+        setSalvando(false)
+      }
+      return
+    }
+
     // Toda oportunidade aberta precisa de próxima ação — se não tem, exige antes de mover
     if (!negocio.proxima_acao || !negocio.proxima_acao_data) {
       setMostrarExigirAcao(true)

@@ -5,7 +5,7 @@ import {
   Search, Calendar, ChevronDown, CircleDollarSign, Disc, ShoppingCart, Wrench,
 } from 'lucide-react'
 import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
-import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
+import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_FATURAMENTO_PROXIMO, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
 import { TEMA, cardBase, cardElevadoBase } from './theme'
 import NovoNegocio from './NovoNegocio.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
@@ -951,10 +951,12 @@ function CardNegocio({ negocio, onClick }) {
     ? CORES_GANHA[negocio.status_faturamento === 'faturado' ? 'faturado' : 'previsto']
     : negocio.etapa === 'perdida'
     ? CORES_PERDIDA
+    : negocio.etapa === 'faturamento_proximo_mes'
+    ? CORES_FATURAMENTO_PROXIMO
     : CORES_TEMPERATURA[negocio.temperatura]
   const notaPci = negocio.avaliacoes_pci?.[0]?.nota_total
   const pci = notaPci !== undefined ? classificarPci(notaPci) : null
-  const atrasado = negocio.etapa !== 'ganha' && negocio.etapa !== 'perdida'
+  const atrasado = negocio.etapa !== 'ganha' && negocio.etapa !== 'perdida' && negocio.etapa !== 'faturamento_proximo_mes'
     && negocio.proxima_acao_data && new Date(negocio.proxima_acao_data) < new Date()
   const corBorda = negocio.urgencia === 'alta' ? '#F77E01' : (pci ? pci.cor : '#ddd')
   const classificacao = classificarValorCliente(negocio.valor_cotacao || negocio.valor_final)

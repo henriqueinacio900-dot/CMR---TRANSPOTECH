@@ -99,45 +99,48 @@ export const STATUS_LEAD = [
   { key: 'convertido', label: 'Convertido' },
 ]
 
-// Questionário de qualificação do lead — soma dá exatamente 0 a 10
-export const PERGUNTAS_LEAD = [
-  {
-    campo: 'porte_pontos',
-    pergunta: 'Qual o porte do cliente?',
-    opcoes: [
-      { label: 'Pequeno', pontos: 1 },
-      { label: 'Médio', pontos: 2 },
-      { label: 'Grande', pontos: 3 },
-    ],
-  },
-  {
-    campo: 'segmento_pontos',
-    pergunta: 'O segmento do cliente tem aderência com o que a Transpotech atende bem?',
-    opcoes: [
-      { label: 'Baixa aderência', pontos: 1 },
-      { label: 'Média aderência', pontos: 2 },
-      { label: 'Alta aderência', pontos: 3 },
-    ],
-  },
-  {
-    campo: 'tempo_pontos',
-    pergunta: 'Tempo de mercado / maturidade do cliente',
-    opcoes: [
-      { label: 'Novo (menos de 1 ano)', pontos: 0 },
-      { label: 'Estabelecido (1 a 5 anos)', pontos: 1 },
-      { label: 'Consolidado (mais de 5 anos)', pontos: 2 },
-    ],
-  },
-  {
-    campo: 'interesse_pontos',
-    pergunta: 'Sinal de interesse no primeiro contato',
-    opcoes: [
-      { label: 'Ainda sem contato', pontos: 0 },
-      { label: 'Respondeu, mas frio', pontos: 1 },
-      { label: 'Demonstrou interesse real', pontos: 2 },
-    ],
-  },
+export const MARCA_ATUAL_OPCOES = [
+  { key: 'multimarcas', label: 'Multimarcas (compra de vários fornecedores)' },
+  { key: 'concorrente', label: 'Marca única de um concorrente' },
+  { key: 'marca_propria', label: 'Já usa a nossa marca' },
+  { key: 'nao_sabe', label: 'Não sabe / sem informação' },
 ]
+
+// Critérios automáticos de pontuação — cada um calcula sozinho a partir do dado
+// digitado. Some tudo e dá no máximo 10. Ajuste as faixas aqui se precisar.
+export function pontosFuncionarios(qtd) {
+  const n = Number(qtd)
+  if (!n || n <= 0) return 0
+  if (n <= 20) return 0.5
+  if (n <= 50) return 1
+  if (n <= 100) return 2
+  return 3
+}
+
+export function pontosMaquinas(qtd) {
+  const n = Number(qtd)
+  if (!n || n <= 0) return 0
+  if (n <= 5) return 0.5
+  if (n <= 15) return 1
+  if (n <= 30) return 2
+  return 3
+}
+
+// Mais perto da base = mais fácil/barato atender = nota maior
+export function pontosDistancia(km) {
+  const n = Number(km)
+  if (n === null || n === undefined || isNaN(n)) return null
+  if (n > 100) return 0
+  if (n > 50) return 1
+  return 2
+}
+
+export function pontosMarca(marca) {
+  if (marca === 'multimarcas') return 2
+  if (marca === 'concorrente') return 1.5
+  if (marca === 'marca_propria') return 0.5
+  return 0 // não sabe / vazio
+}
 
 export function classificarNotaLead(nota) {
   if (nota === null || nota === undefined) return { label: 'Não qualificado', cor: '#999' }

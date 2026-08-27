@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  listarLeads, importarLeads, criarLead, salvarQualificacaoLead, passarBastaoLead, descartarLead,
-  listarDepartamentos, listarConsultores,
+  listarLeads, importarLeads, criarLead, atualizarLead, salvarQualificacaoLead, passarBastaoLead, descartarLead,
+  listarDepartamentos, listarConsultores, calcularDistanciaLead,
 } from './api'
-import { PORTE_OPCOES, ORIGEM_LEAD_OPCOES, STATUS_LEAD, PERGUNTAS_LEAD, classificarNotaLead } from './constants'
+import {
+  PORTE_OPCOES, ORIGEM_LEAD_OPCOES, STATUS_LEAD, MARCA_ATUAL_OPCOES,
+  pontosFuncionarios, pontosMaquinas, pontosDistancia, pontosMarca, classificarNotaLead,
+} from './constants'
 import { TEMA } from './theme'
 
 export default function Leads() {
@@ -209,12 +212,20 @@ function ModalNovoLead({ onFechar, onCriado }) {
   const [nomeCliente, setNomeCliente] = useState('')
   const [cnpj, setCnpj] = useState('')
   const [contatoNome, setContatoNome] = useState('')
+  const [decisorNome, setDecisorNome] = useState('')
+  const [decisorCargo, setDecisorCargo] = useState('')
   const [telefone, setTelefone] = useState('')
+  const [email, setEmail] = useState('')
   const [cidade, setCidade] = useState('')
+  const [estado, setEstado] = useState('')
   const [endereco, setEndereco] = useState('')
   const [porte, setPorte] = useState('')
   const [segmento, setSegmento] = useState('')
   const [origem, setOrigem] = useState('')
+  const [numeroFuncionarios, setNumeroFuncionarios] = useState('')
+  const [qtdMaquinas, setQtdMaquinas] = useState('')
+  const [marcaAtual, setMarcaAtual] = useState('')
+  const [observacoes, setObservacoes] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   async function salvar(e) {
@@ -222,9 +233,15 @@ function ModalNovoLead({ onFechar, onCriado }) {
     setSalvando(true)
     try {
       await criarLead({
-        nome_cliente: nomeCliente, cnpj: cnpj || null, contato_nome: contatoNome || null, telefone: telefone || null,
-        cidade: cidade || null, endereco: endereco || null, porte: porte || null,
+        nome_cliente: nomeCliente, cnpj: cnpj || null, contato_nome: contatoNome || null,
+        decisor_nome: decisorNome || null, decisor_cargo: decisorCargo || null,
+        telefone: telefone || null, email: email || null,
+        cidade: cidade || null, estado: estado || null, endereco: endereco || null, porte: porte || null,
         segmento: segmento || null, origem: origem || null,
+        numero_funcionarios: numeroFuncionarios ? Number(numeroFuncionarios) : null,
+        qtd_maquinas_estimada: qtdMaquinas ? Number(qtdMaquinas) : null,
+        marca_atual: marcaAtual || null,
+        observacoes: observacoes || null,
       })
       onCriado()
     } finally {
@@ -234,20 +251,17 @@ function ModalNovoLead({ onFechar, onCriado }) {
 
   return (
     <Overlay onFechar={onFechar}>
-      <form onSubmit={salvar} style={caixaModal}>
+      <form onSubmit={salvar} style={{ ...caixaModal, width: 460 }}>
         <h2 style={tituloModal}>Novo lead</h2>
+
+        <p style={rotuloSecao}>Dados do cliente</p>
         <Campo label="Nome do cliente"><input required value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} style={inputStyle} /></Campo>
         <Campo label="CNPJ"><input value={cnpj} onChange={e => setCnpj(e.target.value)} style={inputStyle} /></Campo>
-        <Campo label="Contato"><input value={contatoNome} onChange={e => setContatoNome(e.target.value)} style={inputStyle} /></Campo>
-        <Campo label="Telefone"><input value={telefone} onChange={e => setTelefone(e.target.value)} style={inputStyle} /></Campo>
-        <Campo label="Cidade"><input value={cidade} onChange={e => setCidade(e.target.value)} style={inputStyle} /></Campo>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Campo label="Cidade" style={{ flex: 2 }}><input value={cidade} onChange={e => setCidade(e.target.value)} style={inputStyle} /></Campo>
+          <Campo label="Estado" style={{ flex: 1 }}><input maxLength={2} value={estado} onChange={e => setEstado(e.target.value.toUpperCase())} style={inputStyle} /></Campo>
+        </div>
         <Campo label="Endereço"><input value={endereco} onChange={e => setEndereco(e.target.value)} style={inputStyle} /></Campo>
-        <Campo label="Porte">
-          <select value={porte} onChange={e => setPorte(e.target.value)} style={inputStyle}>
-            <option value="">-</option>
-            {PORTE_OPCOES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-          </select>
-        </Campo>
         <Campo label="Segmento"><input value={segmento} onChange={e => setSegmento(e.target.value)} style={inputStyle} /></Campo>
         <Campo label="Origem">
           <select value={origem} onChange={e => setOrigem(e.target.value)} style={inputStyle}>
@@ -255,6 +269,33 @@ function ModalNovoLead({ onFechar, onCriado }) {
             {ORIGEM_LEAD_OPCOES.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
         </Campo>
+
+        <p style={rotuloSecao}>Contato / decisor</p>
+        <Campo label="Contato (quem atendeu)"><input value={contatoNome} onChange={e => setContatoNome(e.target.value)} style={inputStyle} /></Campo>
+        <Campo label="Decisor"><input value={decisorNome} onChange={e => setDecisorNome(e.target.value)} style={inputStyle} /></Campo>
+        <Campo label="Cargo do decisor"><input value={decisorCargo} onChange={e => setDecisorCargo(e.target.value)} style={inputStyle} /></Campo>
+        <Campo label="Telefone"><input value={telefone} onChange={e => setTelefone(e.target.value)} style={inputStyle} /></Campo>
+        <Campo label="E-mail"><input value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} /></Campo>
+
+        <p style={rotuloSecao}>Dados pra qualificação (opcional agora, dá pra preencher depois)</p>
+        <Campo label="Porte (manual, se já souber)">
+          <select value={porte} onChange={e => setPorte(e.target.value)} style={inputStyle}>
+            <option value="">-</option>
+            {PORTE_OPCOES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </Campo>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Campo label="Nº de funcionários" style={{ flex: 1 }}><input type="number" value={numeroFuncionarios} onChange={e => setNumeroFuncionarios(e.target.value)} style={inputStyle} /></Campo>
+          <Campo label="Qtd. máquinas estimada" style={{ flex: 1 }}><input type="number" value={qtdMaquinas} onChange={e => setQtdMaquinas(e.target.value)} style={inputStyle} /></Campo>
+        </div>
+        <Campo label="Marca de empilhadeira atual">
+          <select value={marcaAtual} onChange={e => setMarcaAtual(e.target.value)} style={inputStyle}>
+            <option value="">-</option>
+            {MARCA_ATUAL_OPCOES.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </Campo>
+        <Campo label="Observações"><textarea rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} /></Campo>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button type="button" onClick={onFechar} style={{ ...botaoModal, background: '#eee', color: '#333' }}>Cancelar</button>
           <button type="submit" disabled={salvando} style={{ ...botaoModal, background: '#F77E01', color: '#fff' }}>
@@ -268,26 +309,46 @@ function ModalNovoLead({ onFechar, onCriado }) {
 
 function ModalLead({ lead, departamentos, consultores, onFechar, onAtualizado }) {
   const [aba, setAba] = useState('dados')
-  const [respostas, setRespostas] = useState({
-    porte_pontos: lead.porte_pontos ?? null,
-    segmento_pontos: lead.segmento_pontos ?? null,
-    tempo_pontos: lead.tempo_pontos ?? null,
-    interesse_pontos: lead.interesse_pontos ?? null,
-  })
+  const [numeroFuncionarios, setNumeroFuncionarios] = useState(lead.numero_funcionarios ?? '')
+  const [qtdMaquinas, setQtdMaquinas] = useState(lead.qtd_maquinas_estimada ?? '')
+  const [marcaAtual, setMarcaAtual] = useState(lead.marca_atual ?? '')
+  const [distanciaKm, setDistanciaKm] = useState(lead.distancia_km ?? null)
+  const [calculandoDistancia, setCalculandoDistancia] = useState(false)
   const [departamentoId, setDepartamentoId] = useState('')
   const [consultorId, setConsultorId] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const notaAtual = Object.values(respostas).some(v => v === null)
-    ? null
-    : Object.values(respostas).reduce((s, v) => s + v, 0)
+  const pFunc = pontosFuncionarios(numeroFuncionarios)
+  const pMaq = pontosMaquinas(qtdMaquinas)
+  const pDist = pontosDistancia(distanciaKm)
+  const pMarca = pontosMarca(marcaAtual)
+  const notaAtual = pDist === null ? null : pFunc + pMaq + pDist + pMarca
+
+  async function buscarDistancia() {
+    setCalculandoDistancia(true)
+    setErro('')
+    try {
+      const km = await calcularDistanciaLead(lead)
+      setDistanciaKm(km)
+    } catch (e) {
+      setErro(e.message || 'Não deu pra calcular a distância.')
+    } finally {
+      setCalculandoDistancia(false)
+    }
+  }
 
   async function salvarQualificacao() {
     setSalvando(true)
     setErro('')
     try {
-      await salvarQualificacaoLead(lead.id, respostas)
+      await salvarQualificacaoLead(lead.id, {
+        numero_funcionarios: numeroFuncionarios ? Number(numeroFuncionarios) : null,
+        qtd_maquinas_estimada: qtdMaquinas ? Number(qtdMaquinas) : null,
+        marca_atual: marcaAtual || null,
+        distancia_km: distanciaKm,
+        funcionarios_pontos: pFunc, maquinas_pontos: pMaq, distancia_pontos: pDist || 0, marca_pontos: pMarca,
+      })
       onAtualizado()
     } catch (e) {
       setErro('Não deu pra salvar: ' + (e.message || 'erro desconhecido'))
@@ -350,12 +411,19 @@ function ModalLead({ lead, departamentos, consultores, onFechar, onAtualizado })
 
         {aba === 'dados' && (
           <div style={{ fontSize: 13, color: '#333', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <p style={{ margin: 0 }}><strong>Contato:</strong> {lead.contato_nome || '-'}</p>
             <p style={{ margin: 0 }}><strong>CNPJ:</strong> {lead.cnpj || '-'}</p>
+            <p style={{ margin: 0 }}><strong>Contato:</strong> {lead.contato_nome || '-'}</p>
+            <p style={{ margin: 0 }}><strong>Decisor:</strong> {lead.decisor_nome || '-'} {lead.decisor_cargo ? `(${lead.decisor_cargo})` : ''}</p>
+            <p style={{ margin: 0 }}><strong>E-mail:</strong> {lead.email || '-'}</p>
             <p style={{ margin: 0 }}><strong>Endereço:</strong> {lead.endereco || '-'}</p>
             <p style={{ margin: 0 }}><strong>Porte:</strong> {PORTE_OPCOES.find(p => p.key === lead.porte)?.label || '-'}</p>
             <p style={{ margin: 0 }}><strong>Segmento:</strong> {lead.segmento || '-'}</p>
             <p style={{ margin: 0 }}><strong>Origem:</strong> {ORIGEM_LEAD_OPCOES.find(o => o.key === lead.origem)?.label || '-'}</p>
+            <p style={{ margin: 0 }}><strong>Nº funcionários:</strong> {lead.numero_funcionarios ?? '-'}</p>
+            <p style={{ margin: 0 }}><strong>Qtd. máquinas estimada:</strong> {lead.qtd_maquinas_estimada ?? '-'}</p>
+            <p style={{ margin: 0 }}><strong>Marca atual:</strong> {MARCA_ATUAL_OPCOES.find(m => m.key === lead.marca_atual)?.label || '-'}</p>
+            <p style={{ margin: 0 }}><strong>Distância da base:</strong> {lead.distancia_km ? `${lead.distancia_km} km` : '-'}</p>
+            <p style={{ margin: 0 }}><strong>Observações:</strong> {lead.observacoes || '-'}</p>
             <p style={{ margin: 0 }}><strong>Status:</strong> {STATUS_LEAD.find(s => s.key === lead.status)?.label}</p>
             {lead.status === 'convertido' && (
               <p style={{ margin: 0, color: '#3b6d11' }}>
@@ -372,29 +440,38 @@ function ModalLead({ lead, departamentos, consultores, onFechar, onAtualizado })
 
         {aba === 'qualificar' && (
           <div>
-            {PERGUNTAS_LEAD.map(p => (
-              <div key={p.campo} style={{ marginBottom: 12 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>{p.pergunta}</p>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {p.opcoes.map(o => (
-                    <button
-                      key={o.label}
-                      onClick={() => setRespostas({ ...respostas, [p.campo]: o.pontos })}
-                      style={{
-                        padding: '6px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                        border: respostas[p.campo] === o.pontos ? '2px solid #F77E01' : '1px solid #ddd',
-                        background: respostas[p.campo] === o.pontos ? '#FFF3E8' : '#fff', color: '#333',
-                      }}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
+            <p style={{ fontSize: 12, color: '#777', margin: '0 0 14px' }}>
+              A nota é calculada sozinha a partir dos dados abaixo — não precisa escolher nada manualmente, só preencher.
+            </p>
+
+            <LinhaCriterio label={`Nº de funcionários — ${pFunc} / 3 pts`}>
+              <input type="number" value={numeroFuncionarios} onChange={e => setNumeroFuncionarios(e.target.value)} style={inputStyle} />
+            </LinhaCriterio>
+
+            <LinhaCriterio label={`Qtd. máquinas estimada — ${pMaq} / 3 pts`}>
+              <input type="number" value={qtdMaquinas} onChange={e => setQtdMaquinas(e.target.value)} style={inputStyle} />
+            </LinhaCriterio>
+
+            <LinhaCriterio label={`Distância da base (Novo Santa Rita) — ${pDist ?? '—'} / 2 pts`}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, flex: 1 }}>{distanciaKm !== null ? `${distanciaKm} km` : 'Ainda não calculada'}</span>
+                <button type="button" onClick={buscarDistancia} disabled={calculandoDistancia} style={{ ...botaoModal, flex: 'none', padding: '6px 12px', background: '#eee', color: '#333', fontSize: 12 }}>
+                  {calculandoDistancia ? 'Calculando...' : 'Calcular'}
+                </button>
               </div>
-            ))}
-            <p style={{ fontSize: 13, fontWeight: 700, margin: '12px 0' }}>
+            </LinhaCriterio>
+
+            <LinhaCriterio label={`Marca de empilhadeira atual — ${pMarca} / 2 pts`}>
+              <select value={marcaAtual} onChange={e => setMarcaAtual(e.target.value)} style={inputStyle}>
+                <option value="">-</option>
+                {MARCA_ATUAL_OPCOES.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+              </select>
+            </LinhaCriterio>
+
+            <p style={{ fontSize: 15, fontWeight: 700, margin: '16px 0' }}>
               Nota final: {notaAtual !== null ? notaAtual.toFixed(1) : '—'} / 10
             </p>
+            {distanciaKm === null && <p style={{ fontSize: 11, color: '#a32d2d', margin: '-10px 0 12px' }}>Calcule a distância antes de salvar.</p>}
             {erro && <p style={{ color: '#a32d2d', fontSize: 12 }}>{erro}</p>}
             <button onClick={salvarQualificacao} disabled={salvando || notaAtual === null} style={{ ...botaoModal, background: '#F77E01', color: '#fff' }}>
               {salvando ? 'Salvando...' : 'Salvar qualificação'}
@@ -447,9 +524,18 @@ function Overlay({ children, onFechar }) {
   )
 }
 
-function Campo({ label, children }) {
+function LinhaCriterio({ label, children }) {
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 12 }}>
+      <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 6px', color: '#555' }}>{label}</p>
+      {children}
+    </div>
+  )
+}
+
+function Campo({ label, children, style }) {
+  return (
+    <div style={{ marginBottom: 10, ...style }}>
       <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 4 }}>{label}</label>
       {children}
     </div>
@@ -474,6 +560,10 @@ const caixaModal = {
 }
 
 const tituloModal = { fontSize: 16, margin: '0 0 16px' }
+
+const rotuloSecao = {
+  fontSize: 11, fontWeight: 700, color: '#F77E01', textTransform: 'uppercase', margin: '16px 0 8px', letterSpacing: 0.3,
+}
 
 const botaoModal = {
   flex: 1, padding: 10, border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13,

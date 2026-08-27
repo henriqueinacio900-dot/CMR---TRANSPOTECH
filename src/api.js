@@ -471,8 +471,9 @@ export async function listarLeads() {
   const { data, error } = await supabase
     .from('leads')
     .select(`
-      id, nome_cliente, contato_nome, telefone, cidade, estado, endereco, porte, segmento, origem,
-      status, porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos, nota_qualificacao, observacoes,
+      id, nome_cliente, cnpj, contato_nome, decisor_nome, decisor_cargo, telefone, email, cidade, estado, endereco,
+      porte, segmento, origem, numero_funcionarios, qtd_maquinas_estimada, marca_atual, distancia_km,
+      status, funcionarios_pontos, maquinas_pontos, distancia_pontos, marca_pontos, nota_qualificacao, observacoes,
       criado_em, atualizado_em,
       sdr_responsavel:consultores!leads_sdr_responsavel_id_fkey ( nome ),
       departamento_destino:departamentos ( nome ),
@@ -513,12 +514,57 @@ export async function atualizarLead(id, dados) {
   return data
 }
 
-export async function salvarQualificacaoLead(id, { porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos }) {
-  const nota = (porte_pontos || 0) + (segmento_pontos || 0) + (tempo_pontos || 0) + (interesse_pontos || 0)
+export async function salvarQualificacaoLead(id, { numero_funcionarios, qtd_maquinas_estimada, marca_atual, distancia_km, funcionarios_pontos, maquinas_pontos, distancia_pontos, marca_pontos }) {
+  const nota = (funcionarios_pontos || 0) + (maquinas_pontos || 0) + (distancia_pontos || 0) + (marca_pontos || 0)
   return atualizarLead(id, {
-    porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos,
+    numero_funcionarios, qtd_maquinas_estimada, marca_atual, distancia_km,
+    funcionarios_pontos, maquinas_pontos, distancia_pontos, marca_pontos,
     nota_qualificacao: nota, status: 'qualificado',
   })
+}
+
+// Geocodifica uma cidade via Nominatim (OpenStreetMap), reaproveitando o mesmo
+// cache de coordenadas já usado no Mapa.
+async function geocodificarCidade(cidade, estado) {
+  if (!cidade) return null
+  const chave = `${cidade}-${estado || ''}`.toLowerCase().trim()
+  const cache = await buscarCoordenadasCache()
+  const existente = cache.find(c => c.chave === chave)
+  if (existente) return { lat: existente.latitude, lon: existente.longitude }
+
+  const query = encodeURIComponent(`${cidade}, ${estado || ''}, Brasil`)
+  const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+    headers: { 'Accept-Language': 'pt-BR' },
+  })
+  const resultado = await resp.json()
+  if (!resultado[0]) return null
+  const lat = parseFloat(resultado[0].lat)
+  const lon = parseFloat(resultado[0].lon)
+  await salvarCoordenada({ chave, cidade, estado, latitude: lat, longitude: lon })
+  return { lat, lon }
+}
+
+function distanciaKm(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Cidade base da Transpotech pra calcular a distância dos leads
+const CIDADE_BASE = { nome: 'Novo Santa Rita', estado: 'RS' }
+
+export async function calcularDistanciaLead(lead) {
+  if (!lead.cidade) throw new Error('Esse lead não tem cidade preenchida.')
+  const [coordLead, coordBase] = await Promise.all([
+    geocodificarCidade(lead.cidade, lead.estado),
+    geocodificarCidade(CIDADE_BASE.nome, CIDADE_BASE.estado),
+  ])
+  if (!coordLead) throw new Error(`Não consegui localizar "${lead.cidade}" no mapa.`)
+  if (!coordBase) throw new Error('Não consegui localizar a cidade base (Novo Santa Rita).')
+  const km = distanciaKm(coordLead.lat, coordLead.lon, coordBase.lat, coordBase.lon)
+  return Math.round(km * 10) / 10
 }
 
 export async function passarBastaoLead(lead, { departamento_id, consultor_id }) {

@@ -31,6 +31,22 @@ export default function Leads() {
 
   useEffect(() => { carregar() }, [])
 
+  function normalizarChave(s) {
+    return String(s || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // tira acento
+      .toLowerCase().trim()
+  }
+
+  function pegarColuna(linha, ...nomesPossiveis) {
+    const linhaNormalizada = {}
+    Object.keys(linha).forEach(k => { linhaNormalizada[normalizarChave(k)] = linha[k] })
+    for (const nome of nomesPossiveis) {
+      const valor = linhaNormalizada[normalizarChave(nome)]
+      if (valor !== undefined && valor !== null && String(valor).trim() !== '') return String(valor).trim()
+    }
+    return ''
+  }
+
   async function handleImportar(e) {
     const arquivo = e.target.files[0]
     if (!arquivo) return
@@ -43,16 +59,17 @@ export default function Leads() {
       const linhas = XLSX.utils.sheet_to_json(planilha)
 
       const mapeadas = linhas.map(l => ({
-        nome_cliente: String(l['Nome do cliente'] || l['Nome'] || l['nome_cliente'] || '').trim(),
-        contato_nome: String(l['Contato'] || l['contato'] || '').trim() || null,
-        telefone: String(l['Telefone'] || l['telefone'] || '').trim() || null,
-        cidade: String(l['Cidade'] || l['cidade'] || '').trim() || null,
-        endereco: String(l['Endereço'] || l['Endereco'] || l['endereco'] || '').trim() || null,
-        porte: normalizarPorte(l['Porte'] || l['porte']),
+        nome_cliente: pegarColuna(l, 'Nome do cliente', 'Nome', 'Razão social', 'Razao social', 'nome_cliente'),
+        cnpj: pegarColuna(l, 'CNPJ') || null,
+        contato_nome: pegarColuna(l, 'Contato', 'Contato Nome') || null,
+        telefone: pegarColuna(l, 'Telefone', 'Telefone RFB 1', 'Telefone RFB') || null,
+        cidade: pegarColuna(l, 'Cidade') || null,
+        endereco: pegarColuna(l, 'Endereço', 'Endereco') || null,
+        porte: normalizarPorte(pegarColuna(l, 'Porte', 'Faixa de número de funcionários', 'Faixa de numero de funcionarios')),
       })).filter(l => l.nome_cliente)
 
       if (mapeadas.length === 0) {
-        setMensagemImport('Não achei nenhuma linha com "Nome do cliente" preenchido. Confere os títulos das colunas.')
+        setMensagemImport(`Não achei nenhuma linha com nome preenchido. Colunas encontradas na planilha: ${linhas[0] ? Object.keys(linhas[0]).join(', ') : 'nenhuma'}.`)
         return
       }
 
@@ -70,9 +87,19 @@ export default function Leads() {
 
   function normalizarPorte(valor) {
     const v = String(valor || '').trim().toLowerCase()
+    if (!v) return null
     if (v.startsWith('peq')) return 'pequeno'
     if (v.startsWith('med') || v.startsWith('méd')) return 'medio'
     if (v.startsWith('gran')) return 'grande'
+    // faixas de número de funcionários (ex: "50 a 99 colaboradores", "acima de 500 colaboradores")
+    if (v.includes('acima') || v.includes('1000') || v.includes('500 a') || v.includes('mais de')) return 'grande'
+    const numeros = v.match(/\d+/g)
+    if (numeros) {
+      const maior = Math.max(...numeros.map(Number))
+      if (maior >= 500) return 'grande'
+      if (maior >= 50) return 'medio'
+      return 'pequeno'
+    }
     return null
   }
 
@@ -180,6 +207,7 @@ export default function Leads() {
 
 function ModalNovoLead({ onFechar, onCriado }) {
   const [nomeCliente, setNomeCliente] = useState('')
+  const [cnpj, setCnpj] = useState('')
   const [contatoNome, setContatoNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [cidade, setCidade] = useState('')
@@ -194,7 +222,7 @@ function ModalNovoLead({ onFechar, onCriado }) {
     setSalvando(true)
     try {
       await criarLead({
-        nome_cliente: nomeCliente, contato_nome: contatoNome || null, telefone: telefone || null,
+        nome_cliente: nomeCliente, cnpj: cnpj || null, contato_nome: contatoNome || null, telefone: telefone || null,
         cidade: cidade || null, endereco: endereco || null, porte: porte || null,
         segmento: segmento || null, origem: origem || null,
       })
@@ -209,6 +237,7 @@ function ModalNovoLead({ onFechar, onCriado }) {
       <form onSubmit={salvar} style={caixaModal}>
         <h2 style={tituloModal}>Novo lead</h2>
         <Campo label="Nome do cliente"><input required value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} style={inputStyle} /></Campo>
+        <Campo label="CNPJ"><input value={cnpj} onChange={e => setCnpj(e.target.value)} style={inputStyle} /></Campo>
         <Campo label="Contato"><input value={contatoNome} onChange={e => setContatoNome(e.target.value)} style={inputStyle} /></Campo>
         <Campo label="Telefone"><input value={telefone} onChange={e => setTelefone(e.target.value)} style={inputStyle} /></Campo>
         <Campo label="Cidade"><input value={cidade} onChange={e => setCidade(e.target.value)} style={inputStyle} /></Campo>
@@ -322,6 +351,7 @@ function ModalLead({ lead, departamentos, consultores, onFechar, onAtualizado })
         {aba === 'dados' && (
           <div style={{ fontSize: 13, color: '#333', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ margin: 0 }}><strong>Contato:</strong> {lead.contato_nome || '-'}</p>
+            <p style={{ margin: 0 }}><strong>CNPJ:</strong> {lead.cnpj || '-'}</p>
             <p style={{ margin: 0 }}><strong>Endereço:</strong> {lead.endereco || '-'}</p>
             <p style={{ margin: 0 }}><strong>Porte:</strong> {PORTE_OPCOES.find(p => p.key === lead.porte)?.label || '-'}</p>
             <p style={{ margin: 0 }}><strong>Segmento:</strong> {lead.segmento || '-'}</p>

@@ -78,6 +78,74 @@ export const URGENCIAS = [
 ]
 
 // PCI — perguntas e pontuação
+export const PORTE_OPCOES = [
+  { key: 'pequeno', label: 'Pequeno' },
+  { key: 'medio', label: 'Médio' },
+  { key: 'grande', label: 'Grande' },
+]
+
+export const ORIGEM_LEAD_OPCOES = [
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'facebook', label: 'Facebook' },
+  { key: 'site_leads', label: 'Site de leads' },
+  { key: 'outro', label: 'Outro' },
+]
+
+export const STATUS_LEAD = [
+  { key: 'novo', label: 'Novo' },
+  { key: 'em_qualificacao', label: 'Em qualificação' },
+  { key: 'qualificado', label: 'Qualificado' },
+  { key: 'descartado', label: 'Descartado' },
+  { key: 'convertido', label: 'Convertido' },
+]
+
+// Questionário de qualificação do lead — soma dá exatamente 0 a 10
+export const PERGUNTAS_LEAD = [
+  {
+    campo: 'porte_pontos',
+    pergunta: 'Qual o porte do cliente?',
+    opcoes: [
+      { label: 'Pequeno', pontos: 1 },
+      { label: 'Médio', pontos: 2 },
+      { label: 'Grande', pontos: 3 },
+    ],
+  },
+  {
+    campo: 'segmento_pontos',
+    pergunta: 'O segmento do cliente tem aderência com o que a Transpotech atende bem?',
+    opcoes: [
+      { label: 'Baixa aderência', pontos: 1 },
+      { label: 'Média aderência', pontos: 2 },
+      { label: 'Alta aderência', pontos: 3 },
+    ],
+  },
+  {
+    campo: 'tempo_pontos',
+    pergunta: 'Tempo de mercado / maturidade do cliente',
+    opcoes: [
+      { label: 'Novo (menos de 1 ano)', pontos: 0 },
+      { label: 'Estabelecido (1 a 5 anos)', pontos: 1 },
+      { label: 'Consolidado (mais de 5 anos)', pontos: 2 },
+    ],
+  },
+  {
+    campo: 'interesse_pontos',
+    pergunta: 'Sinal de interesse no primeiro contato',
+    opcoes: [
+      { label: 'Ainda sem contato', pontos: 0 },
+      { label: 'Respondeu, mas frio', pontos: 1 },
+      { label: 'Demonstrou interesse real', pontos: 2 },
+    ],
+  },
+]
+
+export function classificarNotaLead(nota) {
+  if (nota === null || nota === undefined) return { label: 'Não qualificado', cor: '#999' }
+  if (nota >= 8) return { label: 'Alta prioridade', cor: '#3b6d11' }
+  if (nota >= 5) return { label: 'Média prioridade', cor: '#8a6d1f' }
+  return { label: 'Baixa prioridade', cor: '#a32d2d' }
+}
+
 export const PERGUNTAS_PCI = [
   {
     campo: 'qtd_maquinas_pontos',

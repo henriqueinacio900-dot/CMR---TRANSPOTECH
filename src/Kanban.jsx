@@ -21,6 +21,7 @@ import Provisionado from './Provisionado.jsx'
 import Mapa from './Mapa.jsx'
 import Funil from './Funil.jsx'
 import Agenda from './Agenda.jsx'
+import Leads from './Leads.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -89,6 +90,10 @@ export default function Kanban() {
     carregar()
   }, [])
 
+  useEffect(() => {
+    if (euMesmo?.perfil === 'sdr' && visao === 'visao_geral') setVisao('leads')
+  }, [euMesmo])
+
   const filtrados = useMemo(() => {
     let lista = negocios
     if (deptSelecionado !== 'todos') lista = lista.filter(n => n.departamento?.nome === deptSelecionado)
@@ -117,7 +122,7 @@ export default function Kanban() {
   return (
     <div style={{ display: 'flex' }}>
       <style>{ESTILOS_GLOBAIS}</style>
-      <Sidebar visao={visao} onMudarVisao={setVisao} />
+      <Sidebar visao={visao} onMudarVisao={setVisao} euMesmo={euMesmo} />
 
       <div style={{
         flex: 1, minWidth: 0, minHeight: '100vh',
@@ -246,6 +251,7 @@ export default function Kanban() {
         {visao === 'atividades' && <Atividades />}
         {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
         {visao === 'agenda' && <Agenda onAbrir={id => setNegocioSelecionado(id)} />}
+        {visao === 'leads' && <Leads />}
         {visao === 'funil' && <Funil />}
         {visao === 'mapa' && <Mapa />}
         {visao === 'provisionado' && <Provisionado />}

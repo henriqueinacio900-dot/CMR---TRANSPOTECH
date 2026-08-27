@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3, FileSpreadsheet,
-  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight,
+  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight, UserPlus,
 } from 'lucide-react'
 import { TEMA } from './theme'
 
@@ -10,6 +10,7 @@ const ITENS = [
   { key: 'pipeline', label: 'Pipeline', icone: Filter },
   { key: 'funil', label: 'Funil', icone: TrendingDown },
   { key: 'agenda', label: 'Agenda', icone: CalendarDays },
+  { key: 'leads', label: 'Leads', icone: UserPlus },
   { key: 'clientes', label: 'Clientes', icone: Users },
   { key: 'mapa', label: 'Mapa', icone: MapPin },
   { key: 'atividades', label: 'Atividades', icone: CalendarClock },
@@ -18,9 +19,11 @@ const ITENS = [
   { key: 'relatorios', label: 'Relatórios', icone: BarChart3 },
 ]
 
-export default function Sidebar({ visao, onMudarVisao }) {
+export default function Sidebar({ visao, onMudarVisao, euMesmo }) {
   const [recolhido, setRecolhido] = useState(false)
   const largura = recolhido ? 72 : 222
+  // SDR só enxerga a própria aba — não tem acesso ao resto dos dados mesmo
+  const itens = euMesmo?.perfil === 'sdr' ? ITENS.filter(i => i.key === 'leads') : ITENS
 
   return (
     <div style={{
@@ -40,7 +43,7 @@ export default function Sidebar({ visao, onMudarVisao }) {
         />
       </div>
 
-      {ITENS.map(item => {
+      {itens.map(item => {
         const Icone = item.icone
         const ativo = visao === item.key
         return (

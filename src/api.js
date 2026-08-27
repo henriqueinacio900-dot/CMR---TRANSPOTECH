@@ -85,7 +85,7 @@ export async function criarNegocio(dados) {
   const consultor = await getMeuConsultor()
   const { data, error } = await supabase
     .from('negocios')
-    .insert({ ...dados, consultor_id: consultor?.id })
+    .insert({ ...dados, consultor_id: dados.consultor_id || consultor?.id })
     .select()
     .single()
   if (error) throw error
@@ -161,7 +161,6 @@ export async function recalcularProximoPassoOrcamento(negocioId, dataOrcamento) 
     }
   }
 
-  // Se já passou de todos os passos da sequência, não força mais nada sozinho
   if (!passoEscolhido) return null
 
   await atualizarNegocio(negocioId, {
@@ -199,6 +198,7 @@ export async function listarConfiguracoesAutomacao() {
 export async function adiarProximaAcao(negocioId, novaData) {
   return atualizarNegocio(negocioId, { proxima_acao_data: novaData })
 }
+
 export async function listarMotivosPerda() {
   const { data, error } = await supabase.from('motivos_perda').select('*').order('descricao')
   if (error) { console.error(error); return [] }
@@ -258,7 +258,6 @@ export async function listarPassagensBastao() {
   return data
 }
 
-// ---------- Contatos ----------
 export async function listarCandidatosReativacao() {
   const hoje = new Date().toISOString().slice(0, 10)
   const seissentaDiasAtras = new Date()
@@ -310,6 +309,7 @@ export async function criarNegocioReativacao({ cliente_id, departamento_id, prod
     origem: 'recompra',
   })
 }
+
 export async function listarConsultores() {
   const { data, error } = await supabase.from('consultores').select('id, nome, perfil, departamento_id').order('nome')
   if (error) { console.error(error); return [] }
@@ -334,7 +334,6 @@ export async function atualizarContato(id, dados) {
   return data
 }
 
-// ---------- PCI ----------
 export async function buscarPci(negocioId) {
   const { data, error } = await supabase.from('avaliacoes_pci').select('*').eq('negocio_id', negocioId).maybeSingle()
   if (error) { console.error(error); return null }
@@ -352,7 +351,6 @@ export async function salvarPci(negocioId, respostas) {
   return data
 }
 
-// ---------- Atividades ----------
 export async function listarAtividades(negocioId) {
   const { data, error } = await supabase.from('atividades').select('*, responsavel:consultores(nome)').eq('negocio_id', negocioId).order('data_hora', { ascending: false })
   if (error) { console.error(error); return [] }
@@ -366,7 +364,6 @@ export async function criarAtividade(dados) {
   return data
 }
 
-// ---------- Histórico ----------
 export async function registrarHistorico({ negocio_id, tipo_evento, descricao, dados_anteriores, dados_novos }) {
   const consultor = await getMeuConsultor()
   const { error } = await supabase.from('historico').insert({
@@ -468,3 +465,101 @@ function daquiADias(dias) {
   return d.toISOString().slice(0, 10)
 }
 export { daquiADias }
+
+// ---------- Leads (SDR) ----------
+export async function listarLeads() {
+  const { data, error } = await supabase
+    .from('leads')
+    .select(`
+      id, nome_cliente, contato_nome, telefone, cidade, estado, endereco, porte, segmento, origem,
+      status, porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos, nota_qualificacao, observacoes,
+      criado_em, atualizado_em,
+      sdr_responsavel:consultores!leads_sdr_responsavel_id_fkey ( nome ),
+      departamento_destino:departamentos ( nome ),
+      consultor_destino:consultores!leads_consultor_destino_id_fkey ( nome )
+    `)
+    .order('nota_qualificacao', { ascending: false, nullsFirst: false })
+  if (error) { console.error('Erro ao listar leads:', error); return [] }
+  return data
+}
+
+export async function importarLeads(lista) {
+  const consultor = await getMeuConsultor()
+  const linhas = lista.map(l => ({ ...l, sdr_responsavel_id: consultor?.id, status: 'novo' }))
+  const { data, error } = await supabase.from('leads').insert(linhas).select()
+  if (error) throw error
+  return data
+}
+
+export async function criarLead(dados) {
+  const consultor = await getMeuConsultor()
+  const { data, error } = await supabase
+    .from('leads')
+    .insert({ ...dados, sdr_responsavel_id: consultor?.id, status: 'novo' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarLead(id, dados) {
+  const { data, error } = await supabase
+    .from('leads')
+    .update({ ...dados, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function salvarQualificacaoLead(id, { porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos }) {
+  const nota = (porte_pontos || 0) + (segmento_pontos || 0) + (tempo_pontos || 0) + (interesse_pontos || 0)
+  return atualizarLead(id, {
+    porte_pontos, segmento_pontos, tempo_pontos, interesse_pontos,
+    nota_qualificacao: nota, status: 'qualificado',
+  })
+}
+
+export async function passarBastaoLead(lead, { departamento_id, consultor_id }) {
+  const cliente = await criarCliente({
+    razao_social: lead.nome_cliente,
+    cidade: lead.cidade,
+    estado: lead.estado || null,
+    departamento_id,
+    telefone_whats: lead.telefone || null,
+    observacoes_gerais: lead.endereco ? `Endereço: ${lead.endereco}` : null,
+  })
+
+  if (lead.contato_nome) {
+    await criarContato({
+      cliente_id: cliente.id,
+      nome: lead.contato_nome,
+      telefone: lead.telefone || null,
+      principal: true,
+    })
+  }
+
+  const negocio = await criarNegocio({
+    cliente_id: cliente.id,
+    departamento_id,
+    consultor_id,
+    etapa: 'contato_realizado',
+    titulo: lead.nome_cliente,
+    origem: lead.origem === 'instagram' || lead.origem === 'facebook' ? 'campanha' : 'prospeccao_ativa',
+    observacoes: lead.observacoes || null,
+  })
+
+  await atualizarLead(lead.id, {
+    status: 'convertido',
+    departamento_destino_id: departamento_id,
+    consultor_destino_id: consultor_id,
+    negocio_criado_id: negocio.id,
+  })
+
+  return negocio
+}
+
+export async function descartarLead(id, motivo) {
+  return atualizarLead(id, { status: 'descartado', observacoes: motivo || null })
+}

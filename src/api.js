@@ -609,3 +609,52 @@ export async function passarBastaoLead(lead, { departamento_id, consultor_id }) 
 export async function descartarLead(id, motivo) {
   return atualizarLead(id, { status: 'descartado', observacoes: motivo || null })
 }
+
+// ---------- PM2P (contratos de manutenção) ----------
+export async function listarContratosManutencao() {
+  const { data, error } = await supabase
+    .from('contratos_manutencao')
+    .select('*')
+    .order('data_vencimento', { ascending: true, nullsFirst: false })
+  if (error) { console.error('Erro ao listar contratos:', error); return [] }
+  return data
+}
+
+export async function importarContratosManutencao(lista) {
+  const consultor = await getMeuConsultor()
+  const linhas = lista.map(c => ({ ...c, criado_por: consultor?.id }))
+  const { data, error } = await supabase.from('contratos_manutencao').insert(linhas).select()
+  if (error) throw error
+  return data
+}
+
+export async function criarContratoManutencao(dados) {
+  const consultor = await getMeuConsultor()
+  const { data, error } = await supabase
+    .from('contratos_manutencao')
+    .insert({ ...dados, criado_por: consultor?.id })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarContratoManutencao(id, dados) {
+  const { data, error } = await supabase
+    .from('contratos_manutencao')
+    .update({ ...dados, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function registrarContatoContrato(id) {
+  return atualizarContratoManutencao(id, { ultimo_contato_em: new Date().toISOString().slice(0, 10) })
+}
+
+export async function excluirContratoManutencao(id) {
+  const { error } = await supabase.from('contratos_manutencao').delete().eq('id', id)
+  if (error) throw error
+}

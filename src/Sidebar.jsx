@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3, FileSpreadsheet,
-  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight, UserPlus,
+  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight, UserPlus, ShieldCheck,
 } from 'lucide-react'
 import { TEMA } from './theme'
 
@@ -16,14 +16,18 @@ const ITENS = [
   { key: 'atividades', label: 'Atividades', icone: CalendarClock },
   { key: 'reativacao', label: 'Reativação', icone: RefreshCw },
   { key: 'provisionado', label: 'Provisionado', icone: FileSpreadsheet },
+  { key: 'pm2p', label: 'PM2P', icone: ShieldCheck },
   { key: 'relatorios', label: 'Relatórios', icone: BarChart3 },
 ]
 
 export default function Sidebar({ visao, onMudarVisao, euMesmo }) {
   const [recolhido, setRecolhido] = useState(false)
   const largura = recolhido ? 72 : 222
-  // SDR só enxerga a própria aba — não tem acesso ao resto dos dados mesmo
-  const itens = euMesmo?.perfil === 'sdr' ? ITENS.filter(i => i.key === 'leads') : ITENS
+  const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
+  // SDR só enxerga a própria aba; PM2P é só pra admin/gestor
+  const itens = euMesmo?.perfil === 'sdr'
+    ? ITENS.filter(i => i.key === 'leads')
+    : ITENS.filter(i => i.key !== 'pm2p' || ehAdmin)
 
   return (
     <div style={{

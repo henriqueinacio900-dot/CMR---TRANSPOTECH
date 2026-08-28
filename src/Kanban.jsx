@@ -22,6 +22,7 @@ import Mapa from './Mapa.jsx'
 import Funil from './Funil.jsx'
 import Agenda from './Agenda.jsx'
 import Leads from './Leads.jsx'
+import PM2P from './PM2P.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -252,6 +253,7 @@ export default function Kanban() {
         {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
         {visao === 'agenda' && <Agenda onAbrir={id => setNegocioSelecionado(id)} />}
         {visao === 'leads' && <Leads />}
+        {visao === 'pm2p' && <PM2P euMesmo={euMesmo} />}
         {visao === 'funil' && <Funil />}
         {visao === 'mapa' && <Mapa />}
         {visao === 'provisionado' && <Provisionado />}

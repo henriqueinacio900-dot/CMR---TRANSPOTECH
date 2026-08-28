@@ -50,6 +50,13 @@ export default function Leads() {
     return ''
   }
 
+  function extrairNumeroFuncionarios(faixaTexto) {
+    const v = String(faixaTexto || '')
+    const numeros = v.match(/\d+/g)
+    if (!numeros) return null
+    return Math.min(...numeros.map(Number)) // usa o começo da faixa (ex: "50 a 99" -> 50)
+  }
+
   async function handleImportar(e) {
     const arquivo = e.target.files[0]
     if (!arquivo) return
@@ -61,15 +68,19 @@ export default function Leads() {
       const planilha = workbook.Sheets[workbook.SheetNames[0]]
       const linhas = XLSX.utils.sheet_to_json(planilha)
 
-      const mapeadas = linhas.map(l => ({
-        nome_cliente: pegarColuna(l, 'Nome do cliente', 'Nome', 'Razão social', 'Razao social', 'nome_cliente'),
-        cnpj: pegarColuna(l, 'CNPJ') || null,
-        contato_nome: pegarColuna(l, 'Contato', 'Contato Nome') || null,
-        telefone: pegarColuna(l, 'Telefone', 'Telefone RFB 1', 'Telefone RFB') || null,
-        cidade: pegarColuna(l, 'Cidade') || null,
-        endereco: pegarColuna(l, 'Endereço', 'Endereco') || null,
-        porte: normalizarPorte(pegarColuna(l, 'Porte', 'Faixa de número de funcionários', 'Faixa de numero de funcionarios')),
-      })).filter(l => l.nome_cliente)
+      const mapeadas = linhas.map(l => {
+        const faixaFuncionarios = pegarColuna(l, 'Porte', 'Faixa de número de funcionários', 'Faixa de numero de funcionarios')
+        return {
+          nome_cliente: pegarColuna(l, 'Nome do cliente', 'Nome', 'Razão social', 'Razao social', 'nome_cliente'),
+          cnpj: pegarColuna(l, 'CNPJ') || null,
+          contato_nome: pegarColuna(l, 'Contato', 'Contato Nome') || null,
+          telefone: pegarColuna(l, 'Telefone', 'Telefone RFB 1', 'Telefone RFB') || null,
+          cidade: pegarColuna(l, 'Cidade') || null,
+          endereco: pegarColuna(l, 'Endereço', 'Endereco') || null,
+          porte: normalizarPorte(faixaFuncionarios),
+          numero_funcionarios: extrairNumeroFuncionarios(faixaFuncionarios),
+        }
+      }).filter(l => l.nome_cliente)
 
       if (mapeadas.length === 0) {
         setMensagemImport(`Não achei nenhuma linha com nome preenchido. Colunas encontradas na planilha: ${linhas[0] ? Object.keys(linhas[0]).join(', ') : 'nenhuma'}.`)

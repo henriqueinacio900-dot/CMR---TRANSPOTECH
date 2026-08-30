@@ -658,3 +658,23 @@ export async function excluirContratoManutencao(id) {
   const { error } = await supabase.from('contratos_manutencao').delete().eq('id', id)
   if (error) throw error
 }
+
+// Busca a data da última visita registrada no pipeline (atividades) pra cada
+// cliente, pra usar como "último contato" automático no PM2P.
+export async function buscarUltimosContatosPipeline() {
+  const { data, error } = await supabase
+    .from('atividades')
+    .select('data_hora, negocio:negocios(cliente:clientes(razao_social))')
+    .ilike('tipo', '%visita%')
+    .order('data_hora', { ascending: false })
+  if (error) { console.error('Erro ao buscar contatos do pipeline:', error); return {} }
+
+  const mapa = {}
+  data.forEach(a => {
+    const nome = a.negocio?.cliente?.razao_social
+    if (!nome) return
+    const chave = nome.trim().toLowerCase()
+    if (!mapa[chave]) mapa[chave] = a.data_hora // já vem ordenado do mais recente pro mais antigo
+  })
+  return mapa
+}

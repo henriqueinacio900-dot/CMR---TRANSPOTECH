@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
   listarContratosManutencao, importarContratosManutencao, criarContratoManutencao,
-  atualizarContratoManutencao, registrarContatoContrato, excluirContratoManutencao,
+  atualizarContratoManutencao, registrarContatoContrato, excluirContratoManutencao, buscarUltimosContatosPipeline,
 } from './api'
 import { formatarMoeda } from './constants'
 import { TEMA } from './theme'
@@ -12,6 +12,7 @@ const DIAS_ALERTA_CONTATO = 45
 
 export default function PM2P({ euMesmo }) {
   const [contratos, setContratos] = useState([])
+  const [contatosPipeline, setContatosPipeline] = useState({})
   const [carregando, setCarregando] = useState(true)
   const [busca, setBusca] = useState('')
   const [modalNovoAberto, setModalNovoAberto] = useState(false)
@@ -21,7 +22,9 @@ export default function PM2P({ euMesmo }) {
 
   async function carregar() {
     setCarregando(true)
-    setContratos(await listarContratosManutencao())
+    const [c, mapa] = await Promise.all([listarContratosManutencao(), buscarUltimosContatosPipeline()])
+    setContratos(c)
+    setContatosPipeline(mapa)
     setCarregando(false)
   }
 
@@ -122,8 +125,20 @@ export default function PM2P({ euMesmo }) {
   }
   function diasDesde(dataStr) {
     if (!dataStr) return null
-    const d = new Date(dataStr + 'T00:00:00')
+    const d = new Date(dataStr.slice(0, 10) + 'T00:00:00')
     return Math.round((hoje - d) / 86400000)
+  }
+
+  function ultimoContatoReal(contrato) {
+    const doPipeline = contatosPipeline[contrato.cliente_nome.trim().toLowerCase()]
+    return doPipeline || contrato.ultimo_contato_em || null
+  }
+
+  function statusVencimento(dias) {
+    if (dias === null) return { label: '-', cor: TEMA.textoDiscreto }
+    if (dias < 0) return { label: 'Vencido', cor: TEMA.vermelho }
+    if (dias <= 90) return { label: 'A vencer', cor: TEMA.ambar }
+    return { label: 'Em dia', cor: TEMA.verde }
   }
 
   const filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
@@ -133,7 +148,7 @@ export default function PM2P({ euMesmo }) {
   const totalRentabilidadeValor = ativos.reduce((s, c) => s + (c.rentabilidade_valor || 0), 0)
   const rentabilidadeMedia = totalMensalidade > 0 ? somaPonderada / totalMensalidade : 0
   const vencendoLogo = ativos.filter(c => { const d = diasAte(c.data_vencimento); return d !== null && d <= DIAS_ALERTA_VENCIMENTO && d >= 0 })
-  const contatoPendente = ativos.filter(c => { const d = diasDesde(c.ultimo_contato_em); return d === null || d >= DIAS_ALERTA_CONTATO })
+  const contatoPendente = ativos.filter(c => { const d = diasDesde(ultimoContatoReal(c)); return d === null || d >= DIAS_ALERTA_CONTATO })
 
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
@@ -177,12 +192,12 @@ export default function PM2P({ euMesmo }) {
           <thead>
             <tr style={{ textAlign: 'left', color: TEMA.textoSecundario, borderBottom: `1px solid ${TEMA.linhaInterna}` }}>
               <th style={thStyle}>Cliente</th>
-              <th style={thStyle}>Modelo</th>
-              <th style={thStyle}>Analista</th>
               <th style={thStyle}>Mensalidade</th>
-              <th style={thStyle}>Rentabilidade</th>
-              <th style={thStyle}>Rentab. (R$)</th>
+              <th style={thStyle}>Modelo</th>
+              <th style={thStyle}>Analista responsável</th>
+              <th style={thStyle}>Valor rentabilidade</th>
               <th style={thStyle}>Vencimento</th>
+              <th style={thStyle}>% rentabilidade</th>
               <th style={thStyle}>Último contato</th>
               <th style={thStyle}>Status</th>
             </tr>
@@ -190,9 +205,11 @@ export default function PM2P({ euMesmo }) {
           <tbody>
             {filtrados.map(c => {
               const diasVenc = diasAte(c.data_vencimento)
-              const diasContato = diasDesde(c.ultimo_contato_em)
+              const contatoReal = ultimoContatoReal(c)
+              const diasContato = diasDesde(contatoReal)
               const vencendoLogoLinha = diasVenc !== null && diasVenc <= DIAS_ALERTA_VENCIMENTO
               const contatoAtrasado = diasContato === null || diasContato >= DIAS_ALERTA_CONTATO
+              const statusCalc = statusVencimento(diasVenc)
               return (
                 <tr
                   key={c.id}
@@ -200,19 +217,19 @@ export default function PM2P({ euMesmo }) {
                   style={{ borderBottom: `1px solid ${TEMA.linhaInterna}`, cursor: 'pointer' }}
                 >
                   <td style={tdStyle}>{c.cliente_nome}</td>
+                  <td style={tdStyle}>{formatarMoeda(c.valor_mensalidade)}</td>
                   <td style={tdStyle}>{c.modelo || '-'}</td>
                   <td style={tdStyle}>{c.analista || '-'}</td>
-                  <td style={tdStyle}>{formatarMoeda(c.valor_mensalidade)}</td>
-                  <td style={tdStyle}>{c.rentabilidade_percentual !== null ? `${c.rentabilidade_percentual}%` : '-'}</td>
                   <td style={tdStyle}>{c.rentabilidade_valor ? formatarMoeda(c.rentabilidade_valor) : '-'}</td>
                   <td style={{ ...tdStyle, color: vencendoLogoLinha ? TEMA.vermelho : TEMA.textoPrincipal, fontWeight: vencendoLogoLinha ? 700 : 400 }}>
                     {c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                     {vencendoLogoLinha && ` (${diasVenc}d)`}
                   </td>
+                  <td style={tdStyle}>{c.rentabilidade_percentual !== null ? `${c.rentabilidade_percentual}%` : '-'}</td>
                   <td style={{ ...tdStyle, color: contatoAtrasado ? TEMA.vermelho : TEMA.textoPrincipal, fontWeight: contatoAtrasado ? 700 : 400 }}>
-                    {c.ultimo_contato_em ? new Date(c.ultimo_contato_em + 'T00:00:00').toLocaleDateString('pt-BR') : 'Nunca'}
+                    {contatoReal ? new Date(contatoReal.slice(0, 10) + 'T00:00:00').toLocaleDateString('pt-BR') : 'Nunca'}
                   </td>
-                  <td style={tdStyle}>{c.status}</td>
+                  <td style={{ ...tdStyle, color: statusCalc.cor, fontWeight: 700 }}>{statusCalc.label}</td>
                 </tr>
               )
             })}
@@ -223,11 +240,13 @@ export default function PM2P({ euMesmo }) {
           {filtrados.length > 0 && (
             <tfoot>
               <tr style={{ borderTop: `2px solid ${TEMA.linhaInterna}`, fontWeight: 700 }}>
-                <td style={tdStyle} colSpan={3}>Total ({ativos.length} ativos)</td>
+                <td style={tdStyle}>Total ({ativos.length} ativos)</td>
                 <td style={tdStyle}>{formatarMoeda(totalMensalidade)}</td>
-                <td style={tdStyle}>{rentabilidadeMedia.toFixed(1)}% (média)</td>
+                <td style={tdStyle} colSpan={2}></td>
                 <td style={tdStyle}>{formatarMoeda(totalRentabilidadeValor)}</td>
-                <td style={tdStyle} colSpan={3}></td>
+                <td style={tdStyle}></td>
+                <td style={tdStyle}>{rentabilidadeMedia.toFixed(1)}% (média)</td>
+                <td style={tdStyle} colSpan={2}></td>
               </tr>
             </tfoot>
           )}
@@ -311,7 +330,7 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         <Campo label="Cliente"><input required value={clienteNome} onChange={e => setClienteNome(e.target.value)} style={inputStyleModal} /></Campo>
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Modelo" style={{ flex: 1 }}><input value={modelo} onChange={e => setModelo(e.target.value)} style={inputStyleModal} /></Campo>
-          <Campo label="Analista" style={{ flex: 1 }}><input value={analista} onChange={e => setAnalista(e.target.value)} style={inputStyleModal} /></Campo>
+          <Campo label="Analista responsável" style={{ flex: 1 }}><input value={analista} onChange={e => setAnalista(e.target.value)} style={inputStyleModal} /></Campo>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Valor mensalidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={valorMensalidade} onChange={e => setValorMensalidade(e.target.value)} style={inputStyleModal} /></Campo>
@@ -330,7 +349,7 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
 
         {contrato && (
           <p style={{ fontSize: 11, color: '#777', margin: '0 0 10px' }}>
-            Último contato: {contrato.ultimo_contato_em ? new Date(contrato.ultimo_contato_em + 'T00:00:00').toLocaleDateString('pt-BR') : 'Nunca'}
+            Último contato manual: {contrato.ultimo_contato_em ? new Date(contrato.ultimo_contato_em + 'T00:00:00').toLocaleDateString('pt-BR') : 'Nunca'} — a tabela mostra a visita do pipeline quando tiver uma mais recente.
           </p>
         )}
 

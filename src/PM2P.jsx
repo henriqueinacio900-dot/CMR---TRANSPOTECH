@@ -49,6 +49,22 @@ export default function PM2P({ euMesmo }) {
     return ''
   }
 
+  // Busca uma coluna que CONTENHA todos os pedaços de palavra pedidos (ex: "rentabilid"
+  // acha "rentabilidade" e também "rentabildiade" com erro de digitação) e, se
+  // "excluir" for passado, ignora colunas que também contenham esse pedaço.
+  function pegarColunaParecida(linha, pedacos, excluir) {
+    for (const chave of Object.keys(linha)) {
+      const chaveNorm = normalizarChave(chave)
+      const bate = pedacos.every(p => chaveNorm.includes(p))
+      const excluida = excluir && chaveNorm.includes(excluir)
+      if (bate && !excluida) {
+        const valor = linha[chave]
+        if (valor !== undefined && valor !== null && String(valor).trim() !== '') return valor
+      }
+    }
+    return ''
+  }
+
   function paraNumero(valor) {
     if (valor === '' || valor === null || valor === undefined) return null
     if (typeof valor === 'number') return valor
@@ -94,8 +110,8 @@ export default function PM2P({ euMesmo }) {
         analista: String(pegarColuna(l, 'Analista') || '').trim() || null,
         valor_mensalidade: paraNumero(pegarColuna(l, 'Valor mensalidade', 'Mensalidade', 'Valor')) || 0,
         data_vencimento: paraData(pegarColuna(l, 'Vencimento', 'Quando vence', 'Data de vencimento', 'Data vencimento')),
-        rentabilidade_percentual: paraNumero(pegarColuna(l, 'Rentabilidade', 'Rentabilidade %', 'Rentabilidade (%)')),
-        rentabilidade_valor: paraNumero(pegarColuna(l, 'Valor rentabilidade', 'Rentabilidade R$', 'Rentabilidade valor')),
+        rentabilidade_percentual: paraNumero(pegarColunaParecida(l, ['rentabil'], 'valor')),
+        rentabilidade_valor: paraNumero(pegarColunaParecida(l, ['valor', 'rentabil'])),
       })).filter(c => c.cliente_nome)
 
       if (mapeados.length === 0) {

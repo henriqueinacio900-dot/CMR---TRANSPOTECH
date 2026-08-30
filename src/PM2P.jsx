@@ -87,9 +87,12 @@ export default function PM2P({ euMesmo }) {
 
       const mapeados = linhas.map(l => ({
         cliente_nome: String(pegarColuna(l, 'Cliente', 'Nome do cliente', 'Razão social') || '').trim(),
+        modelo: String(pegarColuna(l, 'Modelo') || '').trim() || null,
+        analista: String(pegarColuna(l, 'Analista') || '').trim() || null,
         valor_mensalidade: paraNumero(pegarColuna(l, 'Valor mensalidade', 'Mensalidade', 'Valor')) || 0,
         data_vencimento: paraData(pegarColuna(l, 'Vencimento', 'Quando vence', 'Data de vencimento', 'Data vencimento')),
         rentabilidade_percentual: paraNumero(pegarColuna(l, 'Rentabilidade', 'Rentabilidade %', 'Rentabilidade (%)')),
+        rentabilidade_valor: paraNumero(pegarColuna(l, 'Valor rentabilidade', 'Rentabilidade R$', 'Rentabilidade valor')),
       })).filter(c => c.cliente_nome)
 
       if (mapeados.length === 0) {
@@ -127,6 +130,7 @@ export default function PM2P({ euMesmo }) {
   const ativos = contratos.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
   const somaPonderada = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0) * (c.rentabilidade_percentual || 0), 0)
+  const totalRentabilidadeValor = ativos.reduce((s, c) => s + (c.rentabilidade_valor || 0), 0)
   const rentabilidadeMedia = totalMensalidade > 0 ? somaPonderada / totalMensalidade : 0
   const vencendoLogo = ativos.filter(c => { const d = diasAte(c.data_vencimento); return d !== null && d <= DIAS_ALERTA_VENCIMENTO && d >= 0 })
   const contatoPendente = ativos.filter(c => { const d = diasDesde(c.ultimo_contato_em); return d === null || d >= DIAS_ALERTA_CONTATO })
@@ -145,10 +149,11 @@ export default function PM2P({ euMesmo }) {
       </div>
       {mensagemImport && <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '6px 0 0' }}>{mensagemImport}</p>}
 
-      <div className="tp-grid-4" style={{ margin: '16px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12, margin: '16px 0' }}>
         <CardResumo label="Contratos ativos" valor={ativos.length} />
         <CardResumo label="Total mensalidade" valor={formatarMoeda(totalMensalidade)} />
-        <CardResumo label="Rentabilidade média" valor={`${rentabilidadeMedia.toFixed(1)}%`} />
+        <CardResumo label="Rentabilidade média (%)" valor={`${rentabilidadeMedia.toFixed(1)}%`} />
+        <CardResumo label="Rentabilidade total (R$)" valor={formatarMoeda(totalRentabilidadeValor)} />
         <CardResumo label="Vencendo em 60 dias" valor={vencendoLogo.length} destaque={vencendoLogo.length > 0 ? TEMA.vermelho : null} />
       </div>
 
@@ -172,8 +177,11 @@ export default function PM2P({ euMesmo }) {
           <thead>
             <tr style={{ textAlign: 'left', color: TEMA.textoSecundario, borderBottom: `1px solid ${TEMA.linhaInterna}` }}>
               <th style={thStyle}>Cliente</th>
+              <th style={thStyle}>Modelo</th>
+              <th style={thStyle}>Analista</th>
               <th style={thStyle}>Mensalidade</th>
               <th style={thStyle}>Rentabilidade</th>
+              <th style={thStyle}>Rentab. (R$)</th>
               <th style={thStyle}>Vencimento</th>
               <th style={thStyle}>Último contato</th>
               <th style={thStyle}>Status</th>
@@ -192,8 +200,11 @@ export default function PM2P({ euMesmo }) {
                   style={{ borderBottom: `1px solid ${TEMA.linhaInterna}`, cursor: 'pointer' }}
                 >
                   <td style={tdStyle}>{c.cliente_nome}</td>
+                  <td style={tdStyle}>{c.modelo || '-'}</td>
+                  <td style={tdStyle}>{c.analista || '-'}</td>
                   <td style={tdStyle}>{formatarMoeda(c.valor_mensalidade)}</td>
                   <td style={tdStyle}>{c.rentabilidade_percentual !== null ? `${c.rentabilidade_percentual}%` : '-'}</td>
+                  <td style={tdStyle}>{c.rentabilidade_valor ? formatarMoeda(c.rentabilidade_valor) : '-'}</td>
                   <td style={{ ...tdStyle, color: vencendoLogoLinha ? TEMA.vermelho : TEMA.textoPrincipal, fontWeight: vencendoLogoLinha ? 700 : 400 }}>
                     {c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                     {vencendoLogoLinha && ` (${diasVenc}d)`}
@@ -206,15 +217,16 @@ export default function PM2P({ euMesmo }) {
               )
             })}
             {filtrados.length === 0 && (
-              <tr><td colSpan={6} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
+              <tr><td colSpan={9} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
             )}
           </tbody>
           {filtrados.length > 0 && (
             <tfoot>
               <tr style={{ borderTop: `2px solid ${TEMA.linhaInterna}`, fontWeight: 700 }}>
-                <td style={tdStyle}>Total ({ativos.length} ativos)</td>
+                <td style={tdStyle} colSpan={3}>Total ({ativos.length} ativos)</td>
                 <td style={tdStyle}>{formatarMoeda(totalMensalidade)}</td>
                 <td style={tdStyle}>{rentabilidadeMedia.toFixed(1)}% (média)</td>
+                <td style={tdStyle}>{formatarMoeda(totalRentabilidadeValor)}</td>
                 <td style={tdStyle} colSpan={3}></td>
               </tr>
             </tfoot>
@@ -239,8 +251,11 @@ export default function PM2P({ euMesmo }) {
 
 function ModalContrato({ contrato, onFechar, onSalvo }) {
   const [clienteNome, setClienteNome] = useState(contrato?.cliente_nome || '')
+  const [modelo, setModelo] = useState(contrato?.modelo || '')
+  const [analista, setAnalista] = useState(contrato?.analista || '')
   const [valorMensalidade, setValorMensalidade] = useState(contrato?.valor_mensalidade ?? '')
   const [rentabilidade, setRentabilidade] = useState(contrato?.rentabilidade_percentual ?? '')
+  const [rentabilidadeValor, setRentabilidadeValor] = useState(contrato?.rentabilidade_valor ?? '')
   const [dataVencimento, setDataVencimento] = useState(contrato?.data_vencimento || '')
   const [status, setStatus] = useState(contrato?.status || 'ativo')
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
@@ -252,8 +267,11 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
     try {
       const dados = {
         cliente_nome: clienteNome,
+        modelo: modelo || null,
+        analista: analista || null,
         valor_mensalidade: valorMensalidade ? Number(valorMensalidade) : 0,
         rentabilidade_percentual: rentabilidade !== '' ? Number(rentabilidade) : null,
+        rentabilidade_valor: rentabilidadeValor !== '' ? Number(rentabilidadeValor) : null,
         data_vencimento: dataVencimento || null,
         status,
         observacoes: observacoes || null,
@@ -292,8 +310,13 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>{contrato ? 'Editar contrato' : 'Novo contrato'}</h2>
         <Campo label="Cliente"><input required value={clienteNome} onChange={e => setClienteNome(e.target.value)} style={inputStyleModal} /></Campo>
         <div style={{ display: 'flex', gap: 8 }}>
+          <Campo label="Modelo" style={{ flex: 1 }}><input value={modelo} onChange={e => setModelo(e.target.value)} style={inputStyleModal} /></Campo>
+          <Campo label="Analista" style={{ flex: 1 }}><input value={analista} onChange={e => setAnalista(e.target.value)} style={inputStyleModal} /></Campo>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Valor mensalidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={valorMensalidade} onChange={e => setValorMensalidade(e.target.value)} style={inputStyleModal} /></Campo>
           <Campo label="Rentabilidade (%)" style={{ flex: 1 }}><input type="number" step="0.1" value={rentabilidade} onChange={e => setRentabilidade(e.target.value)} style={inputStyleModal} /></Campo>
+          <Campo label="Rentabilidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={rentabilidadeValor} onChange={e => setRentabilidadeValor(e.target.value)} style={inputStyleModal} /></Campo>
         </div>
         <Campo label="Vencimento"><input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} style={inputStyleModal} /></Campo>
         <Campo label="Status">

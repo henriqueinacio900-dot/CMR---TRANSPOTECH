@@ -23,6 +23,7 @@ import Funil from './Funil.jsx'
 import Agenda from './Agenda.jsx'
 import Leads from './Leads.jsx'
 import PM2P from './PM2P.jsx'
+import RelatorioVisita from './RelatorioVisita.jsx'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -65,6 +66,7 @@ export default function Kanban() {
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [negocioSelecionado, setNegocioSelecionado] = useState(null)
+  const [atividadeParaRelatorio, setAtividadeParaRelatorio] = useState(null)
   const [visao, setVisao] = useState('visao_geral')
   const [busca, setBusca] = useState('')
   const [metas, setMetas] = useState([])
@@ -249,7 +251,16 @@ export default function Kanban() {
         )}
 
         {visao === 'clientes' && <Clientes />}
-        {visao === 'atividades' && <Atividades />}
+        {visao === 'atividades' && (
+          <Atividades onAbrirRelatorioVisita={a => { setAtividadeParaRelatorio(a); setVisao('relatorio_visita') }} />
+        )}
+        {visao === 'relatorio_visita' && (
+          <RelatorioVisita
+            abrirParaAtividade={atividadeParaRelatorio}
+            aoFecharAbertura={() => setAtividadeParaRelatorio(null)}
+            onAbrirNegocio={id => setNegocioSelecionado(id)}
+          />
+        )}
         {visao === 'reativacao' && <Reativacao onAtualizado={carregar} />}
         {visao === 'agenda' && <Agenda onAbrir={id => setNegocioSelecionado(id)} />}
         {visao === 'leads' && <Leads />}

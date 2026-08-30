@@ -390,7 +390,7 @@ export async function listarTodosClientes() {
 export async function listarAtividadesRecentes(limite = 30) {
   const { data, error } = await supabase
     .from('atividades')
-    .select('id, tipo, descricao, data_hora, responsavel:consultores(nome), negocio:negocios(id, cliente:clientes(razao_social))')
+    .select('id, tipo, descricao, data_hora, negocio_id, responsavel:consultores(nome), negocio:negocios(id, cliente:clientes(razao_social, cidade))')
     .order('data_hora', { ascending: false })
     .limit(limite)
   if (error) { console.error(error); return [] }
@@ -677,4 +677,53 @@ export async function buscarUltimosContatosPipeline() {
     if (!mapa[chave]) mapa[chave] = a.data_hora // já vem ordenado do mais recente pro mais antigo
   })
   return mapa
+}
+
+// ---------- Relatório de visita ----------
+export async function listarRelatoriosVisita() {
+  const { data, error } = await supabase
+    .from('relatorios_visita')
+    .select('*, negocio:negocios(id, cliente:clientes(razao_social)), consultor:consultores(nome)')
+    .order('data_visita', { ascending: false })
+  if (error) { console.error('Erro ao listar relatórios de visita:', error); return [] }
+  return data
+}
+
+export async function buscarRelatorioPorAtividade(atividadeId) {
+  const { data, error } = await supabase
+    .from('relatorios_visita')
+    .select('*')
+    .eq('atividade_id', atividadeId)
+    .maybeSingle()
+  if (error) { console.error(error); return null }
+  return data
+}
+
+export async function salvarRelatorioVisita(dados, id) {
+  const consultor = await getMeuConsultor()
+  if (id) {
+    const { data, error } = await supabase
+      .from('relatorios_visita')
+      .update({ ...dados, atualizado_em: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+  const { data, error } = await supabase
+    .from('relatorios_visita')
+    .insert({ ...dados, consultor_id: consultor?.id })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function uploadFotoRelatorio(arquivo) {
+  const nomeArquivo = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '')}`
+  const { error } = await supabase.storage.from('relatorio-fotos').upload(nomeArquivo, arquivo)
+  if (error) throw error
+  const { data } = supabase.storage.from('relatorio-fotos').getPublicUrl(nomeArquivo)
+  return data.publicUrl
 }

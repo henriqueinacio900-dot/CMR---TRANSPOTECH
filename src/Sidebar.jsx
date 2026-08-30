@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   LayoutDashboard, Filter, Users, CalendarClock, RefreshCw, BarChart3, FileSpreadsheet,
-  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight, UserPlus, ShieldCheck,
+  MapPin, TrendingDown, CalendarDays, ChevronsLeft, ChevronsRight, UserPlus, ShieldCheck, ClipboardList,
 } from 'lucide-react'
 import { TEMA } from './theme'
 
@@ -14,6 +14,7 @@ const ITENS = [
   { key: 'clientes', label: 'Clientes', icone: Users },
   { key: 'mapa', label: 'Mapa', icone: MapPin },
   { key: 'atividades', label: 'Atividades', icone: CalendarClock },
+  { key: 'relatorio_visita', label: 'Relatórios de visita', icone: ClipboardList },
   { key: 'reativacao', label: 'Reativação', icone: RefreshCw },
   { key: 'provisionado', label: 'Provisionado', icone: FileSpreadsheet },
   { key: 'pm2p', label: 'PM2P', icone: ShieldCheck },

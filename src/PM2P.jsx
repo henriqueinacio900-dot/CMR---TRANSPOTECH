@@ -81,12 +81,16 @@ export default function PM2P({ euMesmo }) {
       if (!data) return null
       return `${data.y}-${String(data.m).padStart(2, '0')}-${String(data.d).padStart(2, '0')}`
     }
-    const texto = String(valor).trim()
+    // tira espaço e qualquer caractere que não seja número ou barra (ex: "01/09/2026%")
+    const texto = String(valor).trim().replace(/[^\d/]/g, '')
     const partesBr = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
     if (partesBr) {
-      const [, d, m, a] = partesBr
-      const ano = a.length === 2 ? `20${a}` : a
-      return `${ano}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+      const [, dStr, mStr, aStr] = partesBr
+      const d = Number(dStr)
+      const m = Number(mStr)
+      if (d < 1 || d > 31 || m < 1 || m > 12) return null // data inválida (ex: dia 00) — ignora em vez de quebrar
+      const ano = aStr.length === 2 ? `20${aStr}` : aStr
+      return `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
     const comoData = new Date(texto)
     if (!isNaN(comoData)) return comoData.toISOString().slice(0, 10)
@@ -104,15 +108,19 @@ export default function PM2P({ euMesmo }) {
       const planilha = workbook.Sheets[workbook.SheetNames[0]]
       const linhas = XLSX.utils.sheet_to_json(planilha)
 
-      const mapeados = linhas.map(l => ({
-        cliente_nome: String(pegarColuna(l, 'Cliente', 'Nome do cliente', 'Razão social') || '').trim(),
-        modelo: String(pegarColuna(l, 'Modelo') || '').trim() || null,
-        analista: String(pegarColuna(l, 'Analista') || '').trim() || null,
-        valor_mensalidade: paraNumero(pegarColuna(l, 'Valor mensalidade', 'Mensalidade', 'Valor')) || 0,
-        data_vencimento: paraData(pegarColuna(l, 'Vencimento', 'Quando vence', 'Data de vencimento', 'Data vencimento')),
-        rentabilidade_percentual: paraNumero(pegarColunaParecida(l, ['rentabil'], 'valor')),
-        rentabilidade_valor: paraNumero(pegarColunaParecida(l, ['valor', 'rentabil'])),
-      })).filter(c => c.cliente_nome)
+      const mapeados = linhas.map(l => {
+        const valorMensalidade = paraNumero(pegarColuna(l, 'Valor mensalidade', 'Mensalidade', 'Valor')) || 0
+        const valorRentabilidade = paraNumero(pegarColunaParecida(l, ['valor', 'rentabil'])) || 0
+        return {
+          cliente_nome: String(pegarColuna(l, 'Cliente', 'Nome do cliente', 'Razão social') || '').trim(),
+          modelo: String(pegarColuna(l, 'Modelo') || '').trim() || null,
+          analista: String(pegarColuna(l, 'Analista') || '').trim() || null,
+          valor_mensalidade: valorMensalidade,
+          data_vencimento: paraData(pegarColuna(l, 'Vencimento', 'Quando vence', 'Data de vencimento', 'Data vencimento')),
+          rentabilidade_valor: valorRentabilidade || null,
+          rentabilidade_percentual: valorMensalidade > 0 ? Math.round((valorRentabilidade / valorMensalidade) * 1000) / 10 : null,
+        }
+      }).filter(c => c.cliente_nome)
 
       if (mapeados.length === 0) {
         setMensagemImport(`Não achei nenhuma linha com cliente preenchido. Colunas encontradas: ${linhas[0] ? Object.keys(linhas[0]).join(', ') : 'nenhuma'}.`)
@@ -160,9 +168,8 @@ export default function PM2P({ euMesmo }) {
   const filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
   const ativos = contratos.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
-  const somaPonderada = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0) * (c.rentabilidade_percentual || 0), 0)
   const totalRentabilidadeValor = ativos.reduce((s, c) => s + (c.rentabilidade_valor || 0), 0)
-  const rentabilidadeMedia = totalMensalidade > 0 ? somaPonderada / totalMensalidade : 0
+  const rentabilidadeMedia = totalMensalidade > 0 ? (totalRentabilidadeValor / totalMensalidade) * 100 : 0
   const vencendoLogo = ativos.filter(c => { const d = diasAte(c.data_vencimento); return d !== null && d <= DIAS_ALERTA_VENCIMENTO && d >= 0 })
   const contatoPendente = ativos.filter(c => { const d = diasDesde(ultimoContatoReal(c)); return d === null || d >= DIAS_ALERTA_CONTATO })
 
@@ -186,6 +193,10 @@ export default function PM2P({ euMesmo }) {
         <CardResumo label="Rentabilidade média (%)" valor={`${rentabilidadeMedia.toFixed(1)}%`} />
         <CardResumo label="Rentabilidade total (R$)" valor={formatarMoeda(totalRentabilidadeValor)} />
         <CardResumo label="Vencendo em 60 dias" valor={vencendoLogo.length} destaque={vencendoLogo.length > 0 ? TEMA.vermelho : null} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <Top5Rentaveis contratos={ativos} />
       </div>
 
       {contatoPendente.length > 0 && (
@@ -284,13 +295,54 @@ export default function PM2P({ euMesmo }) {
   )
 }
 
+function Top5Rentaveis({ contratos }) {
+  const top5 = [...contratos]
+    .filter(c => c.rentabilidade_percentual !== null && c.rentabilidade_percentual !== undefined)
+    .sort((a, b) => b.rentabilidade_percentual - a.rentabilidade_percentual)
+    .slice(0, 5)
+
+  if (top5.length === 0) return null
+
+  return (
+    <div style={{ background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 16 }}>
+      <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 10px', color: TEMA.textoPrincipal }}>
+        Top 5 contratos mais rentáveis (por % de rentabilidade)
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {top5.map((c, i) => (
+          <div
+            key={c.id}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0',
+              borderBottom: i < top5.length - 1 ? `1px solid ${TEMA.linhaInterna}` : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: TEMA.textoDiscreto, width: 14 }}>{i + 1}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: TEMA.textoPrincipal }}>{c.cliente_nome}</span>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: TEMA.verde }}>{c.rentabilidade_percentual}%</span>
+              <span style={{ fontSize: 11, color: TEMA.textoSecundario, marginLeft: 6 }}>
+                ({formatarMoeda(c.rentabilidade_valor || 0)})
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ModalContrato({ contrato, onFechar, onSalvo }) {
   const [clienteNome, setClienteNome] = useState(contrato?.cliente_nome || '')
   const [modelo, setModelo] = useState(contrato?.modelo || '')
   const [analista, setAnalista] = useState(contrato?.analista || '')
   const [valorMensalidade, setValorMensalidade] = useState(contrato?.valor_mensalidade ?? '')
-  const [rentabilidade, setRentabilidade] = useState(contrato?.rentabilidade_percentual ?? '')
   const [rentabilidadeValor, setRentabilidadeValor] = useState(contrato?.rentabilidade_valor ?? '')
+  const rentabilidadeCalculada = valorMensalidade > 0 && rentabilidadeValor !== ''
+    ? Math.round((Number(rentabilidadeValor) / Number(valorMensalidade)) * 1000) / 10
+    : null
   const [dataVencimento, setDataVencimento] = useState(contrato?.data_vencimento || '')
   const [status, setStatus] = useState(contrato?.status || 'ativo')
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
@@ -305,7 +357,7 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         modelo: modelo || null,
         analista: analista || null,
         valor_mensalidade: valorMensalidade ? Number(valorMensalidade) : 0,
-        rentabilidade_percentual: rentabilidade !== '' ? Number(rentabilidade) : null,
+        rentabilidade_percentual: rentabilidadeCalculada,
         rentabilidade_valor: rentabilidadeValor !== '' ? Number(rentabilidadeValor) : null,
         data_vencimento: dataVencimento || null,
         status,
@@ -350,7 +402,11 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Valor mensalidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={valorMensalidade} onChange={e => setValorMensalidade(e.target.value)} style={inputStyleModal} /></Campo>
-          <Campo label="Rentabilidade (%)" style={{ flex: 1 }}><input type="number" step="0.1" value={rentabilidade} onChange={e => setRentabilidade(e.target.value)} style={inputStyleModal} /></Campo>
+          <Campo label="Rentabilidade (%) — calculada" style={{ flex: 1 }}>
+            <div style={{ ...inputStyleModal, background: '#f2f2f2', color: '#555', display: 'flex', alignItems: 'center' }}>
+              {rentabilidadeCalculada !== null ? `${rentabilidadeCalculada}%` : '-'}
+            </div>
+          </Campo>
           <Campo label="Rentabilidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={rentabilidadeValor} onChange={e => setRentabilidadeValor(e.target.value)} style={inputStyleModal} /></Campo>
         </div>
         <Campo label="Vencimento"><input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} style={inputStyleModal} /></Campo>

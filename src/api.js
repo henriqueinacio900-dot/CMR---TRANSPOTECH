@@ -727,3 +727,33 @@ export async function uploadFotoRelatorio(arquivo) {
   const { data } = supabase.storage.from('relatorio-fotos').getPublicUrl(nomeArquivo)
   return data.publicUrl
 }
+
+// ---------- Visitas programadas (uso mobile) ----------
+// Visitas programadas = negócios com "Próxima ação" = Visita e uma data marcada.
+// Pega da segunda desta semana pra frente, mais qualquer atrasada (não perde nada).
+export async function listarVisitasProgramadasPendentes() {
+  const hoje = new Date()
+  const diaSemana = hoje.getDay() // 0=domingo
+  const segundaDestaSemanaOffset = diaSemana === 0 ? -6 : 1 - diaSemana
+  const inicioSemana = new Date(hoje)
+  inicioSemana.setDate(hoje.getDate() + segundaDestaSemanaOffset)
+  const fimSemana = new Date(inicioSemana)
+  fimSemana.setDate(inicioSemana.getDate() + 6)
+  fimSemana.setHours(23, 59, 59, 999)
+
+  const { data, error } = await supabase
+    .from('negocios')
+    .select('id, proxima_acao_data, cliente:clientes(razao_social, cidade, estado)')
+    .eq('proxima_acao', 'visita')
+    .not('proxima_acao_data', 'is', null)
+    .lte('proxima_acao_data', fimSemana.toISOString())
+    .order('proxima_acao_data', { ascending: true })
+
+  if (error) { console.error('Erro ao listar visitas programadas:', error); return [] }
+  return data
+}
+
+// Marca a visita como feita (limpa a próxima ação, some da lista de pendentes)
+export async function concluirVisitaProgramada(negocioId) {
+  return atualizarNegocio(negocioId, { proxima_acao: null, proxima_acao_data: null })
+}

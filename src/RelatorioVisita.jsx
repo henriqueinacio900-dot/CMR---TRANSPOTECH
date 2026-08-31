@@ -86,7 +86,7 @@ export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, 
   )
 }
 
-function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
+export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
   const [campos, setCampos] = useState({
     empresa: relatorio.empresa || '', cidade: relatorio.cidade || '', estado: relatorio.estado || '',
     data_visita: relatorio.data_visita || new Date().toISOString().slice(0, 10),

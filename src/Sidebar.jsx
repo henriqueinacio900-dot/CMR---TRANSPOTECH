@@ -28,7 +28,7 @@ export default function Sidebar({ visao, onMudarVisao, euMesmo }) {
   // SDR só enxerga a própria aba; PM2P é só pra admin/gestor
   const itens = euMesmo?.perfil === 'sdr'
     ? ITENS.filter(i => i.key === 'leads')
-    : ITENS.filter(i => i.key !== 'pm2p' || ehAdmin)
+    : ITENS.filter(i => i.key !== 'pm2p' || ehAdmin || euMesmo?.eh_analista_pm2p)
 
   return (
     <div style={{

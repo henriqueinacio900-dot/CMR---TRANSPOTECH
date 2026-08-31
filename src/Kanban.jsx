@@ -4,7 +4,7 @@ import {
   BarChart3, Scale, Trophy, TrendingUp, Clock, Bell, Phone, MessageCircle, LogOut, PieChart as PieIcon,
   Search, Calendar, ChevronDown, CircleDollarSign, Disc, ShoppingCart, Wrench,
 } from 'lucide-react'
-import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes } from './api'
+import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProspeccao, getMeuConsultor, sair, listarMetasMes, listarContratosManutencao } from './api'
 import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_FATURAMENTO_PROXIMO, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
 import { TEMA, cardBase, cardElevadoBase } from './theme'
 import NovoNegocio from './NovoNegocio.jsx'
@@ -603,6 +603,42 @@ function TopVendedores({ filtrados }) {
 
 const ICONE_DEPARTAMENTO = { 'Pneus': Disc, 'Pós-vendas': Wrench, 'Varejo': ShoppingCart }
 
+function CardPM2PVisaoGeral() {
+  const [contratos, setContratos] = useState([])
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    listarContratosManutencao().then(c => { setContratos(c); setCarregando(false) })
+  }, [])
+
+  if (carregando) return null
+
+  const ativos = contratos.filter(c => c.status === 'ativo')
+  const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const totalFaturado = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const percentual = totalMensalidade > 0 ? (totalFaturado / totalMensalidade) * 100 : 0
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px', color: TEMA.textoPrincipal }}>PM2P — Contratos de manutenção</p>
+      <div className="tp-grid-3">
+        <div className="tp-card" style={cardBase}>
+          <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Total a faturar</p>
+          <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>{formatarMoeda(totalMensalidade)}</p>
+        </div>
+        <div className="tp-card" style={cardBase}>
+          <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>Já faturado</p>
+          <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: TEMA.verde }}>{formatarMoeda(totalFaturado)}</p>
+        </div>
+        <div className="tp-card" style={cardBase}>
+          <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 6px', textTransform: 'uppercase', fontWeight: 600 }}>% faturado</p>
+          <p style={{ fontSize: 22, fontWeight: 700, margin: 0, color: percentual >= 100 ? TEMA.verde : TEMA.ambar }}>{percentual.toFixed(1)}%</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MetaPorDepartamento({ negocios, departamentos, consultores, metas }) {
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
@@ -717,7 +753,7 @@ function GraficoCrescimentoDiario({ filtradosPeriodo, periodo }) {
 }
 
 function VisaoGeral(props) {
-  const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado, departamentos, consultores, metas } = props
+  const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado, departamentos, consultores, metas, euMesmo } = props
   const filtradosPeriodo = filtrados.filter(n => {
     if (!n.criado_em) return false
     const d = new Date(n.criado_em)
@@ -745,6 +781,10 @@ function VisaoGeral(props) {
       </div>
 
       <MetaPorDepartamento negocios={filtrados} departamentos={departamentos} consultores={consultores} metas={metas} />
+
+      {(euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor' || euMesmo?.eh_analista_pm2p) && (
+        <CardPM2PVisaoGeral />
+      )}
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <PipelinePorEtapa filtrados={filtradosPeriodo} />

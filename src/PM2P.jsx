@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import {
   listarContratosManutencao, importarContratosManutencao, criarContratoManutencao,
   atualizarContratoManutencao, registrarContatoContrato, excluirContratoManutencao, buscarUltimosContatosPipeline,
+  marcarContratoFaturado,
 } from './api'
 import { formatarMoeda } from './constants'
 import { TEMA } from './theme'
@@ -31,8 +32,14 @@ export default function PM2P({ euMesmo }) {
   useEffect(() => { carregar() }, [])
 
   const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
-  if (euMesmo && !ehAdmin) {
+  const ehAnalistaPm2p = euMesmo?.eh_analista_pm2p
+  if (euMesmo && !ehAdmin && !ehAnalistaPm2p) {
     return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Você não tem acesso a essa área.</p>
+  }
+
+  // Analista PM2P (não admin/gestor): tela simplificada, só marcar faturado
+  if (euMesmo && !ehAdmin && ehAnalistaPm2p) {
+    return <MeusContratosPm2p euMesmo={euMesmo} />
   }
 
   function normalizarChave(s) {
@@ -168,6 +175,8 @@ export default function PM2P({ euMesmo }) {
   const filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
   const ativos = contratos.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const totalFaturadoPm2p = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const percentualFaturadoPm2p = totalMensalidade > 0 ? (totalFaturadoPm2p / totalMensalidade) * 100 : 0
   const totalRentabilidadeValor = ativos.reduce((s, c) => s + (c.rentabilidade_valor || 0), 0)
   const rentabilidadeMedia = totalMensalidade > 0 ? (totalRentabilidadeValor / totalMensalidade) * 100 : 0
   const vencendoLogo = ativos.filter(c => { const d = diasAte(c.data_vencimento); return d !== null && d <= DIAS_ALERTA_VENCIMENTO && d >= 0 })
@@ -193,6 +202,12 @@ export default function PM2P({ euMesmo }) {
         <CardResumo label="Rentabilidade média (%)" valor={`${rentabilidadeMedia.toFixed(1)}%`} />
         <CardResumo label="Rentabilidade total (R$)" valor={formatarMoeda(totalRentabilidadeValor)} />
         <CardResumo label="Vencendo em 60 dias" valor={vencendoLogo.length} destaque={vencendoLogo.length > 0 ? TEMA.vermelho : null} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
+        <CardResumo label="Total a faturar (PM2P)" valor={formatarMoeda(totalMensalidade)} />
+        <CardResumo label="Já faturado (PM2P)" valor={formatarMoeda(totalFaturadoPm2p)} destaque={TEMA.verde} />
+        <CardResumo label="% faturado" valor={`${percentualFaturadoPm2p.toFixed(1)}%`} destaque={percentualFaturadoPm2p >= 100 ? TEMA.verde : TEMA.ambar} />
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -222,6 +237,7 @@ export default function PM2P({ euMesmo }) {
               <th style={thStyle}>Mensalidade</th>
               <th style={thStyle}>Modelo</th>
               <th style={thStyle}>Analista responsável</th>
+              <th style={thStyle}>Já faturado</th>
               <th style={thStyle}>Valor rentabilidade</th>
               <th style={thStyle}>Vencimento</th>
               <th style={thStyle}>% rentabilidade</th>
@@ -246,7 +262,18 @@ export default function PM2P({ euMesmo }) {
                   <td style={tdStyle}>{c.cliente_nome}</td>
                   <td style={tdStyle}>{formatarMoeda(c.valor_mensalidade)}</td>
                   <td style={tdStyle}>{c.modelo || '-'}</td>
-                  <td style={tdStyle}>{c.analista || '-'}</td>
+                  <td style={tdStyle}>{c.analista_consultor?.nome || c.analista || '-'}</td>
+                  <td style={tdStyle} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={!!c.faturado}
+                      onChange={async e => {
+                        await marcarContratoFaturado(c.id, e.target.checked)
+                        carregar()
+                      }}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={tdStyle}>{c.rentabilidade_valor ? formatarMoeda(c.rentabilidade_valor) : '-'}</td>
                   <td style={{ ...tdStyle, color: vencendoLogoLinha ? TEMA.vermelho : TEMA.textoPrincipal, fontWeight: vencendoLogoLinha ? 700 : 400 }}>
                     {c.data_vencimento ? new Date(c.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
@@ -261,7 +288,7 @@ export default function PM2P({ euMesmo }) {
               )
             })}
             {filtrados.length === 0 && (
-              <tr><td colSpan={9} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
+              <tr><td colSpan={10} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
             )}
           </tbody>
           {filtrados.length > 0 && (
@@ -269,7 +296,7 @@ export default function PM2P({ euMesmo }) {
               <tr style={{ borderTop: `2px solid ${TEMA.linhaInterna}`, fontWeight: 700 }}>
                 <td style={tdStyle}>Total ({ativos.length} ativos)</td>
                 <td style={tdStyle}>{formatarMoeda(totalMensalidade)}</td>
-                <td style={tdStyle} colSpan={2}></td>
+                <td style={tdStyle} colSpan={3}></td>
                 <td style={tdStyle}>{formatarMoeda(totalRentabilidadeValor)}</td>
                 <td style={tdStyle}></td>
                 <td style={tdStyle}>{rentabilidadeMedia.toFixed(1)}% (média)</td>
@@ -329,6 +356,68 @@ function Top5Rentaveis({ contratos }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function MeusContratosPm2p({ euMesmo }) {
+  const [contratos, setContratos] = useState([])
+  const [carregando, setCarregando] = useState(true)
+
+  async function carregar() {
+    setCarregando(true)
+    setContratos(await listarContratosManutencao()) // RLS já traz só os do próprio analista
+    setCarregando(false)
+  }
+
+  useEffect(() => { carregar() }, [])
+
+  if (carregando) return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Carregando...</p>
+
+  const ativos = contratos.filter(c => c.status === 'ativo')
+  const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const totalFaturado = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
+  const percentual = totalMensalidade > 0 ? (totalFaturado / totalMensalidade) * 100 : 0
+
+  return (
+    <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
+      <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>PM2P — Meus contratos</p>
+      <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 16px' }}>{euMesmo?.nome}</p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+        <CardResumo label="Total a faturar" valor={formatarMoeda(totalMensalidade)} />
+        <CardResumo label="Já faturado" valor={formatarMoeda(totalFaturado)} destaque={TEMA.verde} />
+        <CardResumo label="% faturado" valor={`${percentual.toFixed(1)}%`} destaque={percentual >= 100 ? TEMA.verde : TEMA.ambar} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {ativos.map(c => (
+          <label
+            key={c.id}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+              background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 14, cursor: 'pointer',
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{c.cliente_nome}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: TEMA.textoSecundario }}>{formatarMoeda(c.valor_mensalidade)} / mês</p>
+            </div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: c.faturado ? TEMA.verde : TEMA.textoSecundario, fontWeight: 600 }}>
+                {c.faturado ? 'Faturado ✓' : 'Marcar como faturado'}
+              </span>
+              <input
+                type="checkbox"
+                checked={!!c.faturado}
+                onChange={async e => { await marcarContratoFaturado(c.id, e.target.checked); carregar() }}
+                style={{ width: 20, height: 20, cursor: 'pointer' }}
+              />
+            </span>
+          </label>
+        ))}
+        {ativos.length === 0 && <p style={{ color: TEMA.textoDiscreto, fontSize: 13 }}>Nenhum contrato PM2P atribuído a você ainda.</p>}
       </div>
     </div>
   )

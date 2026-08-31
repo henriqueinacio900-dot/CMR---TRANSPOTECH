@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { TEMA } from './theme'
 import { listarTodosClientes, listarDepartamentos, atualizarCliente } from './api'
-import { formatarTelefoneInput } from './constants'
+import { formatarTelefoneInput, classificarPciNovo } from './constants'
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
@@ -52,6 +52,15 @@ export default function Clientes() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ margin: 0, fontSize: 11, color: '#999' }}>{c.departamento?.nome}</p>
+              {c.pci_nota !== null && c.pci_nota !== undefined && (
+                <span style={{
+                  display: 'inline-block', fontSize: 12, fontWeight: 800, padding: '2px 9px', borderRadius: 10, marginRight: 4,
+                  background: classificarPciNovo(c.pci_nota).cor + '22', color: classificarPciNovo(c.pci_nota).cor,
+                  border: `1px solid ${classificarPciNovo(c.pci_nota).cor}55`,
+                }}>
+                  PCI {c.pci_nota}
+                </span>
+              )}
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
                 background: c.status_cliente === 'ativo' ? '#eaf3de' : '#f1efe8',
@@ -116,6 +125,19 @@ function ModalEditarCliente({ cliente, departamentos, onFechar, onSalvo }) {
           <h2 style={{ fontSize: 16, margin: 0 }}>Editar cliente</h2>
           <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
         </div>
+
+        {cliente.pci_nota !== null && cliente.pci_nota !== undefined && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16,
+            background: classificarPciNovo(cliente.pci_nota).cor + '15', border: `1px solid ${classificarPciNovo(cliente.pci_nota).cor}55`,
+            borderRadius: 8, padding: '8px 12px',
+          }}>
+            <span style={{ fontSize: 12, color: '#555' }}>Nota PCI (última visita)</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: classificarPciNovo(cliente.pci_nota).cor }}>
+              {cliente.pci_nota} / 100 — {cliente.pci_classificacao || classificarPciNovo(cliente.pci_nota).label}
+            </span>
+          </div>
+        )}
 
         <Campo label="Razão social / Nome do cliente">
           <input value={campos.razao_social} onChange={e => setCampos({ ...campos, razao_social: e.target.value })} style={inputStyle} />

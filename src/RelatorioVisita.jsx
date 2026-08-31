@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
 import { listarRelatoriosVisita, buscarRelatorioPorAtividade, salvarRelatorioVisita, uploadFotoRelatorio } from './api'
+import {
+  SEGMENTOS, PRODUTOS_MOVIMENTADOS, CAMPOS_PCI, OPORTUNIDADES_OPCOES,
+  calcularNotaPCI, classificarPciNovo,
+} from './constants'
 import { TEMA } from './theme'
-import PciForm from './PciForm.jsx'
 
-const PERFIS_CONTATO = [
-  { key: 'decisor', label: 'Decisor' },
-  { key: 'influenciador', label: 'Influenciador' },
-  { key: 'tecnico', label: 'Técnico' },
-  { key: 'usuario', label: 'Usuário' },
-]
+function campo(chave) { return CAMPOS_PCI.find(c => c.chave === chave) }
 
 export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, onAbrirNegocio }) {
   const [modo, setModo] = useState('lista') // lista | form | ver
@@ -25,9 +23,7 @@ export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, 
   useEffect(() => { carregar() }, [])
 
   useEffect(() => {
-    if (abrirParaAtividade) {
-      abrirFormulario(abrirParaAtividade)
-    }
+    if (abrirParaAtividade) abrirFormulario(abrirParaAtividade)
   }, [abrirParaAtividade])
 
   async function abrirFormulario(atividade) {
@@ -61,25 +57,36 @@ export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, 
 
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
-      <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Relatórios de visita</p>
+      <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Relatórios de visita — PCI</p>
       <p style={{ fontSize: 12, color: TEMA.textoSecundario, margin: '0 0 16px' }}>
         Preenchidos a partir das visitas agendadas na aba Atividades.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {relatorios.map(r => (
-          <div
-            key={r.id}
-            onClick={() => { setRelatorioAtual(r); setModo('ver') }}
-            style={{ background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 12, cursor: 'pointer' }}
-          >
-            <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: TEMA.textoPrincipal }}>
-              {r.empresa || r.negocio?.cliente?.razao_social}
-            </p>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: TEMA.textoSecundario }}>
-              {r.cidade} · {r.consultor?.nome} · {r.data_visita ? new Date(r.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
-            </p>
-          </div>
-        ))}
+        {relatorios.map(r => {
+          const classif = classificarPciNovo(r.nota_pci)
+          return (
+            <div
+              key={r.id}
+              onClick={() => { setRelatorioAtual(r); setModo('ver') }}
+              style={{ background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}
+            >
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: TEMA.textoPrincipal }}>
+                  {r.empresa || r.negocio?.cliente?.razao_social}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: TEMA.textoSecundario }}>
+                  {r.cidade} · {r.consultor?.nome} · {r.data_visita ? new Date(r.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                </p>
+              </div>
+              <span style={{
+                fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0,
+                background: classif.cor + '22', color: classif.cor, border: `1px solid ${classif.cor}55`,
+              }}>
+                {r.nota_pci ?? '—'} / 100
+              </span>
+            </div>
+          )
+        })}
         {relatorios.length === 0 && <p style={{ color: TEMA.textoDiscreto, fontSize: 13 }}>Nenhum relatório preenchido ainda.</p>}
       </div>
     </div>
@@ -90,21 +97,24 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
   const [campos, setCampos] = useState({
     empresa: relatorio.empresa || '', cidade: relatorio.cidade || '', estado: relatorio.estado || '',
     data_visita: relatorio.data_visita || new Date().toISOString().slice(0, 10),
-    contato_nome: relatorio.contato_nome || '', contato_cargo: relatorio.contato_cargo || '', perfil_contato: relatorio.perfil_contato || '',
-    segmento: relatorio.segmento || '', tipo_operacao: relatorio.tipo_operacao || '', tipo_piso: relatorio.tipo_piso || '',
-    tipo_produto: relatorio.tipo_produto || '', qtd_turnos: relatorio.qtd_turnos || '',
-    qtd_maquinas_total: relatorio.qtd_maquinas_total ?? '', qtd_eletricas: relatorio.qtd_eletricas ?? '',
-    qtd_glp: relatorio.qtd_glp ?? '', qtd_diesel: relatorio.qtd_diesel ?? '',
+    contato_nome: relatorio.contato_nome || '', contato_cargo: relatorio.contato_cargo || '',
+    segmento: relatorio.segmento || '', segmento_outro: relatorio.segmento_outro || '',
+    produto_movimentado: relatorio.produto_movimentado || '', produto_outro: relatorio.produto_outro || '',
+    tipo_operacao: relatorio.tipo_operacao || '', tipo_piso: relatorio.tipo_piso || '',
+    turnos: relatorio.turnos || '', dias_semana: relatorio.dias_semana || '',
+    qtd_maquinas_faixa: relatorio.qtd_maquinas_faixa || '',
+    qtd_eletricas: relatorio.qtd_eletricas ?? '', qtd_glp: relatorio.qtd_glp ?? '', qtd_diesel: relatorio.qtd_diesel ?? '',
     qtd_classe_i: relatorio.qtd_classe_i ?? '', qtd_classe_ii: relatorio.qtd_classe_ii ?? '',
     qtd_classe_iii: relatorio.qtd_classe_iii ?? '', qtd_classe_iv: relatorio.qtd_classe_iv ?? '', qtd_classe_v: relatorio.qtd_classe_v ?? '',
-    marcas_predominantes: relatorio.marcas_predominantes || '', idade_media_frota: relatorio.idade_media_frota || '',
-    possui_manutencao_interna: relatorio.possui_manutencao_interna || '', qtd_tecnicos_internos: relatorio.qtd_tecnicos_internos || '',
-    consumo_pecas: relatorio.consumo_pecas || '', consumo_pneus: relatorio.consumo_pneus || '', consumo_baterias: relatorio.consumo_baterias || '',
-    modelo_baterias: relatorio.modelo_baterias || '', principais_dores: relatorio.principais_dores || '',
-    existe_projeto_futuro: relatorio.existe_projeto_futuro || '', tipo_projeto: relatorio.tipo_projeto || '',
-    prazo_estimado: relatorio.prazo_estimado || '', oportunidades_identificadas: relatorio.oportunidades_identificadas || '',
-    descricao_geral: relatorio.descricao_geral || '',
+    manutencao_interna: relatorio.manutencao_interna || '', tecnico_interno: relatorio.tecnico_interno || '',
+    consumo_pecas: relatorio.consumo_pecas || '', consumo_pneus: relatorio.consumo_pneus || '', consumo_rodas: relatorio.consumo_rodas || '',
+    projeto_futuro: relatorio.projeto_futuro || '', tipo_projeto: relatorio.tipo_projeto || '', tipo_projeto_outro: relatorio.tipo_projeto_outro || '',
+    prazo_projeto: relatorio.prazo_projeto || '',
+    contato_perfil: relatorio.contato_perfil || '', aderencia: relatorio.aderencia || '',
+    custo_mensal_estimado: relatorio.custo_mensal_estimado || '',
+    comentarios: relatorio.comentarios || relatorio.descricao_geral || '',
   })
+  const [oportunidades, setOportunidades] = useState(relatorio.oportunidades || [])
   const [fotos, setFotos] = useState(relatorio.fotos || [])
   const [enviandoFoto, setEnviandoFoto] = useState(false)
   const [erroFoto, setErroFoto] = useState('')
@@ -112,7 +122,14 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
   const [erro, setErro] = useState('')
   const [salvo, setSalvo] = useState(false)
 
-  function set(campo, valor) { setCampos({ ...campos, [campo]: valor }) }
+  function set(campoChave, valor) { setCampos(c => ({ ...c, [campoChave]: valor })) }
+
+  function alternarOportunidade(key) {
+    setOportunidades(o => o.includes(key) ? o.filter(x => x !== key) : [...o, key])
+  }
+
+  const notaAtual = calcularNotaPCI(campos, oportunidades)
+  const classificacaoAtual = classificarPciNovo(notaAtual)
 
   async function adicionarFotos(e) {
     const arquivos = Array.from(e.target.files || [])
@@ -126,10 +143,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
     setEnviandoFoto(true)
     try {
       const urls = []
-      for (const arquivo of arquivos) {
-        const url = await uploadFotoRelatorio(arquivo)
-        urls.push(url)
-      }
+      for (const arquivo of arquivos) urls.push(await uploadFotoRelatorio(arquivo))
       setFotos(f => [...f, ...urls])
     } catch (err) {
       setErroFoto('Não deu pra enviar a foto: ' + (err.message || 'erro desconhecido'))
@@ -139,9 +153,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
     }
   }
 
-  function removerFoto(url) {
-    setFotos(f => f.filter(x => x !== url))
-  }
+  function removerFoto(url) { setFotos(f => f.filter(x => x !== url)) }
 
   async function salvar() {
     setSalvando(true)
@@ -149,10 +161,11 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
     try {
       const dados = {
         ...campos,
-        fotos,
+        oportunidades, fotos,
         negocio_id: relatorio.negocio_id || null,
         atividade_id: relatorio.atividade_id || null,
-        qtd_maquinas_total: campos.qtd_maquinas_total !== '' ? Number(campos.qtd_maquinas_total) : null,
+        nota_pci: notaAtual,
+        pci_classificacao: classificacaoAtual.label,
         qtd_eletricas: campos.qtd_eletricas !== '' ? Number(campos.qtd_eletricas) : null,
         qtd_glp: campos.qtd_glp !== '' ? Number(campos.qtd_glp) : null,
         qtd_diesel: campos.qtd_diesel !== '' ? Number(campos.qtd_diesel) : null,
@@ -164,6 +177,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
       }
       await salvarRelatorioVisita(dados, relatorio.id)
       setSalvo(true)
+      if (onSalvo) onSalvo()
     } catch (e) {
       setErro('Não deu pra salvar: ' + (e.message || 'erro desconhecido'))
     } finally {
@@ -174,7 +188,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal, maxWidth: 700, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Relatório de visita comercial — PCI</p>
+        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Relatório de visita — PCI</p>
         <button onClick={onCancelar} style={{ background: 'none', border: 'none', color: TEMA.textoSecundario, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
       </div>
 
@@ -183,6 +197,19 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
           <p style={{ color: TEMA.verde, fontSize: 13, margin: 0, fontWeight: 600 }}>✓ Relatório salvo com sucesso.</p>
         </div>
       )}
+
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 5, background: TEMA.fundoPrincipal, padding: '10px 0', marginBottom: 6,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 12, color: TEMA.textoSecundario }}>Nota PCI (calculada sozinha)</span>
+        <span style={{
+          fontSize: 18, fontWeight: 800, padding: '4px 14px', borderRadius: 20,
+          background: classificacaoAtual.cor + '22', color: classificacaoAtual.cor, border: `1px solid ${classificacaoAtual.cor}55`,
+        }}>
+          {notaAtual} / 100 — {classificacaoAtual.label}
+        </span>
+      </div>
 
       <Secao titulo="1. Dados da visita">
         <LinhaCampos>
@@ -200,32 +227,44 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
           <Campo label="Nome" style={{ flex: 1 }}><input value={campos.contato_nome} onChange={e => set('contato_nome', e.target.value)} style={inputStyle} /></Campo>
           <Campo label="Cargo" style={{ flex: 1 }}><input value={campos.contato_cargo} onChange={e => set('contato_cargo', e.target.value)} style={inputStyle} /></Campo>
         </LinhaCampos>
-        <Campo label="Perfil do contato">
-          <select value={campos.perfil_contato} onChange={e => set('perfil_contato', e.target.value)} style={inputStyle}>
-            <option value="">-</option>
-            {PERFIS_CONTATO.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-          </select>
-        </Campo>
+        <SelectPontuado def={campo('contato_perfil')} valor={campos.contato_perfil} onChange={v => set('contato_perfil', v)} />
       </Secao>
 
       <Secao titulo="3. Perfil da operação">
+        <Campo label="Segmento">
+          <select value={campos.segmento} onChange={e => set('segmento', e.target.value)} style={inputStyle}>
+            <option value="">-</option>
+            {SEGMENTOS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Campo>
+        {campos.segmento === 'Outros' && (
+          <Campo label="Qual segmento?"><input value={campos.segmento_outro} onChange={e => set('segmento_outro', e.target.value)} style={inputStyle} /></Campo>
+        )}
+
+        <Campo label="Produto movimentado">
+          <select value={campos.produto_movimentado} onChange={e => set('produto_movimentado', e.target.value)} style={inputStyle}>
+            <option value="">-</option>
+            {PRODUTOS_MOVIMENTADOS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Campo>
+        {campos.produto_movimentado === 'Outros' && (
+          <Campo label="Qual produto?"><input value={campos.produto_outro} onChange={e => set('produto_outro', e.target.value)} style={inputStyle} /></Campo>
+        )}
+
+        <SelectPontuado def={campo('tipo_operacao')} valor={campos.tipo_operacao} onChange={v => set('tipo_operacao', v)} />
+        <SelectPontuado def={campo('tipo_piso')} valor={campos.tipo_piso} onChange={v => set('tipo_piso', v)} />
         <LinhaCampos>
-          <Campo label="Segmento" style={{ flex: 1 }}><input value={campos.segmento} onChange={e => set('segmento', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Tipo de operação" style={{ flex: 1 }}><input value={campos.tipo_operacao} onChange={e => set('tipo_operacao', e.target.value)} style={inputStyle} /></Campo>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('turnos')} valor={campos.turnos} onChange={v => set('turnos', v)} /></div>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('dias_semana')} valor={campos.dias_semana} onChange={v => set('dias_semana', v)} /></div>
         </LinhaCampos>
-        <LinhaCampos>
-          <Campo label="Tipo de piso" style={{ flex: 1 }}><input value={campos.tipo_piso} onChange={e => set('tipo_piso', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Tipo de produto movimentado" style={{ flex: 1 }}><input value={campos.tipo_produto} onChange={e => set('tipo_produto', e.target.value)} style={inputStyle} /></Campo>
-        </LinhaCampos>
-        <Campo label="Quantidade de turnos"><input value={campos.qtd_turnos} onChange={e => set('qtd_turnos', e.target.value)} style={inputStyle} /></Campo>
       </Secao>
 
       <Secao titulo="4. Frota de empilhadeiras">
-        <Campo label="Quantidade total de máquinas"><input type="number" value={campos.qtd_maquinas_total} onChange={e => set('qtd_maquinas_total', e.target.value)} style={inputStyle} /></Campo>
+        <SelectPontuado def={campo('qtd_maquinas_faixa')} valor={campos.qtd_maquinas_faixa} onChange={v => set('qtd_maquinas_faixa', v)} />
         <LinhaCampos>
-          <Campo label="Elétricas" style={{ flex: 1 }}><input type="number" value={campos.qtd_eletricas} onChange={e => set('qtd_eletricas', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="GLP" style={{ flex: 1 }}><input type="number" value={campos.qtd_glp} onChange={e => set('qtd_glp', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Diesel" style={{ flex: 1 }}><input type="number" value={campos.qtd_diesel} onChange={e => set('qtd_diesel', e.target.value)} style={inputStyle} /></Campo>
+          <Campo label="Elétricas (qtd.)" style={{ flex: 1 }}><input type="number" value={campos.qtd_eletricas} onChange={e => set('qtd_eletricas', e.target.value)} style={inputStyle} /></Campo>
+          <Campo label="GLP (qtd.)" style={{ flex: 1 }}><input type="number" value={campos.qtd_glp} onChange={e => set('qtd_glp', e.target.value)} style={inputStyle} /></Campo>
+          <Campo label="Diesel (qtd.)" style={{ flex: 1 }}><input type="number" value={campos.qtd_diesel} onChange={e => set('qtd_diesel', e.target.value)} style={inputStyle} /></Campo>
         </LinhaCampos>
         <LinhaCampos>
           <Campo label="Classe I" style={{ flex: 1 }}><input type="number" value={campos.qtd_classe_i} onChange={e => set('qtd_classe_i', e.target.value)} style={inputStyle} /></Campo>
@@ -236,37 +275,51 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
           <Campo label="Classe IV" style={{ flex: 1 }}><input type="number" value={campos.qtd_classe_iv} onChange={e => set('qtd_classe_iv', e.target.value)} style={inputStyle} /></Campo>
           <Campo label="Classe V" style={{ flex: 1 }}><input type="number" value={campos.qtd_classe_v} onChange={e => set('qtd_classe_v', e.target.value)} style={inputStyle} /></Campo>
         </LinhaCampos>
-        <LinhaCampos>
-          <Campo label="Marcas predominantes" style={{ flex: 1 }}><input value={campos.marcas_predominantes} onChange={e => set('marcas_predominantes', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Idade média da frota" style={{ flex: 1 }}><input value={campos.idade_media_frota} onChange={e => set('idade_media_frota', e.target.value)} style={inputStyle} /></Campo>
-        </LinhaCampos>
       </Secao>
 
       <Secao titulo="5. Manutenção e consumo">
         <LinhaCampos>
-          <Campo label="Possui manutenção interna?" style={{ flex: 1 }}><input value={campos.possui_manutencao_interna} onChange={e => set('possui_manutencao_interna', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Qtd. técnicos internos" style={{ flex: 1 }}><input value={campos.qtd_tecnicos_internos} onChange={e => set('qtd_tecnicos_internos', e.target.value)} style={inputStyle} /></Campo>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('manutencao_interna')} valor={campos.manutencao_interna} onChange={v => set('manutencao_interna', v)} /></div>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('tecnico_interno')} valor={campos.tecnico_interno} onChange={v => set('tecnico_interno', v)} /></div>
         </LinhaCampos>
         <LinhaCampos>
-          <Campo label="Consumo de peças" style={{ flex: 1 }}><input value={campos.consumo_pecas} onChange={e => set('consumo_pecas', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Consumo de pneus" style={{ flex: 1 }}><input value={campos.consumo_pneus} onChange={e => set('consumo_pneus', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Consumo de baterias" style={{ flex: 1 }}><input value={campos.consumo_baterias} onChange={e => set('consumo_baterias', e.target.value)} style={inputStyle} /></Campo>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('consumo_pecas')} valor={campos.consumo_pecas} onChange={v => set('consumo_pecas', v)} /></div>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('consumo_pneus')} valor={campos.consumo_pneus} onChange={v => set('consumo_pneus', v)} /></div>
+          <div style={{ flex: 1 }}><SelectPontuado def={campo('consumo_rodas')} valor={campos.consumo_rodas} onChange={v => set('consumo_rodas', v)} /></div>
         </LinhaCampos>
-        <Campo label="Modelo de bateria atual"><input value={campos.modelo_baterias} onChange={e => set('modelo_baterias', e.target.value)} style={inputStyle} /></Campo>
-        <Campo label="Principais dores"><textarea rows={2} value={campos.principais_dores} onChange={e => set('principais_dores', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} /></Campo>
       </Secao>
 
       <Secao titulo="6. Projetos futuros">
-        <Campo label="Existe projeto futuro?"><input value={campos.existe_projeto_futuro} onChange={e => set('existe_projeto_futuro', e.target.value)} style={inputStyle} /></Campo>
-        <LinhaCampos>
-          <Campo label="Tipo de projeto" style={{ flex: 1 }}><input value={campos.tipo_projeto} onChange={e => set('tipo_projeto', e.target.value)} style={inputStyle} /></Campo>
-          <Campo label="Prazo estimado" style={{ flex: 1 }}><input value={campos.prazo_estimado} onChange={e => set('prazo_estimado', e.target.value)} style={inputStyle} /></Campo>
-        </LinhaCampos>
-        <Campo label="Oportunidades identificadas"><textarea rows={2} value={campos.oportunidades_identificadas} onChange={e => set('oportunidades_identificadas', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} /></Campo>
+        <SelectPontuado def={campo('projeto_futuro')} valor={campos.projeto_futuro} onChange={v => set('projeto_futuro', v)} />
+        {campos.projeto_futuro === 'sim' && (
+          <>
+            <SelectPontuado def={campo('tipo_projeto')} valor={campos.tipo_projeto} onChange={v => set('tipo_projeto', v)} />
+            {campos.tipo_projeto === 'Outros' && (
+              <Campo label="Qual projeto?"><input value={campos.tipo_projeto_outro} onChange={e => set('tipo_projeto_outro', e.target.value)} style={inputStyle} /></Campo>
+            )}
+            <SelectPontuado def={campo('prazo_projeto')} valor={campos.prazo_projeto} onChange={v => set('prazo_projeto', v)} />
+          </>
+        )}
       </Secao>
 
-      <Secao titulo="7. Descrição geral da visita">
-        <textarea rows={4} value={campos.descricao_geral} onChange={e => set('descricao_geral', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} />
+      <Secao titulo={`7. Oportunidades identificadas (${oportunidades.length}/7)`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {OPORTUNIDADES_OPCOES.map(o => (
+            <label key={o.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={oportunidades.includes(o.key)} onChange={() => alternarOportunidade(o.key)} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      </Secao>
+
+      <Secao titulo="8. Aderência e potencial">
+        <SelectPontuado def={campo('aderencia')} valor={campos.aderencia} onChange={v => set('aderencia', v)} />
+        <SelectPontuado def={campo('custo_mensal_estimado')} valor={campos.custo_mensal_estimado} onChange={v => set('custo_mensal_estimado', v)} />
+      </Secao>
+
+      <Secao titulo="9. Comentários">
+        <textarea rows={4} value={campos.comentarios} onChange={e => set('comentarios', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} />
       </Secao>
 
       <Secao titulo={`Fotos da visita (${fotos.length}/10)`}>
@@ -275,12 +328,8 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
             <div key={url} style={{ position: 'relative' }}>
               <img src={url} alt="Foto da visita" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6, border: `1px solid ${TEMA.linhaInterna}` }} />
               <button
-                type="button"
-                onClick={() => removerFoto(url)}
-                style={{
-                  position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
-                  borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer', lineHeight: '20px', padding: 0,
-                }}
+                type="button" onClick={() => removerFoto(url)}
+                style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer', lineHeight: '20px', padding: 0 }}
               >
                 ✕
               </button>
@@ -288,10 +337,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
           ))}
         </div>
         {fotos.length < 10 && (
-          <label style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)',
-            border: `1px solid ${TEMA.linhaInterna}`, borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer',
-          }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${TEMA.linhaInterna}`, borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer' }}>
             {enviandoFoto ? 'Enviando...' : '📷 Adicionar foto(s)'}
             <input type="file" accept="image/*" multiple capture="environment" onChange={adicionarFotos} disabled={enviandoFoto} style={{ display: 'none' }} />
           </label>
@@ -299,24 +345,9 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
         {erroFoto && <p style={{ color: TEMA.vermelho, fontSize: 12, marginTop: 6 }}>{erroFoto}</p>}
       </Secao>
 
-      {relatorio.negocio_id && (
-        <Secao titulo="8. Score PCI — perfil de cliente ideal">
-          <div style={{ background: '#fff', borderRadius: 10, padding: 14 }}>
-            <PciForm negocioId={relatorio.negocio_id} />
-          </div>
-        </Secao>
-      )}
-      {!relatorio.negocio_id && (
-        <p style={{ fontSize: 12, color: TEMA.textoDiscreto, marginBottom: 16 }}>
-          Essa visita não está ligada a um negócio no pipeline, então não dá pra preencher o PCI aqui.
-        </p>
-      )}
-
       {erro && <p style={{ color: TEMA.vermelho, fontSize: 13 }}>{erro}</p>}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 40 }}>
-        <button onClick={onCancelar} style={{ ...botao, background: 'rgba(255,255,255,0.06)', color: TEMA.textoPrincipal, border: `1px solid ${TEMA.linhaInterna}` }}>
-          Voltar
-        </button>
+        <button onClick={onCancelar} style={{ ...botao, background: 'rgba(255,255,255,0.06)', color: TEMA.textoPrincipal, border: `1px solid ${TEMA.linhaInterna}` }}>Voltar</button>
         <button onClick={salvar} disabled={salvando} style={{ ...botao, background: '#F77E01', color: '#fff' }}>
           {salvando ? 'Salvando...' : 'Salvar relatório'}
         </button>
@@ -325,12 +356,23 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
   )
 }
 
-function VisualizarRelatorio({ relatorio, onFechar, onAbrirNegocio }) {
+function VisualizarRelatorio({ relatorio, onFechar }) {
+  const classif = classificarPciNovo(relatorio.nota_pci)
+  const opcaoLabel = (chave, valor) => campo(chave)?.opcoes.find(o => o.key === valor)?.label || valor || '-'
+
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal, maxWidth: 700, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{relatorio.empresa}</p>
-        <button onClick={onFechar} style={{ background: 'none', border: 'none', color: TEMA.textoSecundario, fontSize: 13, cursor: 'pointer' }}>Voltar</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontSize: 15, fontWeight: 800, padding: '4px 12px', borderRadius: 20,
+            background: classif.cor + '22', color: classif.cor, border: `1px solid ${classif.cor}55`,
+          }}>
+            {relatorio.nota_pci ?? '—'} / 100 — {classif.label}
+          </span>
+          <button onClick={onFechar} style={{ background: 'none', border: 'none', color: TEMA.textoSecundario, fontSize: 13, cursor: 'pointer' }}>Voltar</button>
+        </div>
       </div>
 
       <Bloco titulo="Dados da visita" itens={[
@@ -342,41 +384,50 @@ function VisualizarRelatorio({ relatorio, onFechar, onAbrirNegocio }) {
       <Bloco titulo="Contato principal" itens={[
         ['Nome', relatorio.contato_nome || '-'],
         ['Cargo', relatorio.contato_cargo || '-'],
-        ['Perfil', PERFIS_CONTATO.find(p => p.key === relatorio.perfil_contato)?.label || '-'],
+        ['Perfil', opcaoLabel('contato_perfil', relatorio.contato_perfil)],
       ]} />
 
       <Bloco titulo="Perfil da operação" itens={[
-        ['Segmento', relatorio.segmento || '-'],
-        ['Tipo de operação', relatorio.tipo_operacao || '-'],
-        ['Tipo de piso', relatorio.tipo_piso || '-'],
-        ['Produto movimentado', relatorio.tipo_produto || '-'],
-        ['Turnos', relatorio.qtd_turnos || '-'],
+        ['Segmento', relatorio.segmento === 'Outros' ? relatorio.segmento_outro : (relatorio.segmento || '-')],
+        ['Produto movimentado', relatorio.produto_movimentado === 'Outros' ? relatorio.produto_outro : (relatorio.produto_movimentado || '-')],
+        ['Tipo de operação', opcaoLabel('tipo_operacao', relatorio.tipo_operacao)],
+        ['Tipo de piso', opcaoLabel('tipo_piso', relatorio.tipo_piso)],
+        ['Turnos', opcaoLabel('turnos', relatorio.turnos)],
+        ['Dias de operação', opcaoLabel('dias_semana', relatorio.dias_semana)],
       ]} />
 
       <Bloco titulo="Frota de empilhadeiras" itens={[
-        ['Total de máquinas', relatorio.qtd_maquinas_total ?? '-'],
+        ['Total de máquinas', opcaoLabel('qtd_maquinas_faixa', relatorio.qtd_maquinas_faixa)],
         ['Elétricas / GLP / Diesel', `${relatorio.qtd_eletricas ?? 0} / ${relatorio.qtd_glp ?? 0} / ${relatorio.qtd_diesel ?? 0}`],
         ['Classes I-V', `${relatorio.qtd_classe_i ?? 0} / ${relatorio.qtd_classe_ii ?? 0} / ${relatorio.qtd_classe_iii ?? 0} / ${relatorio.qtd_classe_iv ?? 0} / ${relatorio.qtd_classe_v ?? 0}`],
-        ['Marcas predominantes', relatorio.marcas_predominantes || '-'],
-        ['Idade média da frota', relatorio.idade_media_frota || '-'],
       ]} />
 
       <Bloco titulo="Manutenção e consumo" itens={[
-        ['Manutenção interna', relatorio.possui_manutencao_interna || '-'],
-        ['Técnicos internos', relatorio.qtd_tecnicos_internos || '-'],
-        ['Consumo peças/pneus/baterias', `${relatorio.consumo_pecas || '-'} / ${relatorio.consumo_pneus || '-'} / ${relatorio.consumo_baterias || '-'}`],
-        ['Modelo de bateria', relatorio.modelo_baterias || '-'],
-        ['Principais dores', relatorio.principais_dores || '-'],
+        ['Manutenção interna', opcaoLabel('manutencao_interna', relatorio.manutencao_interna)],
+        ['Técnico interno', opcaoLabel('tecnico_interno', relatorio.tecnico_interno)],
+        ['Consumo de peças', opcaoLabel('consumo_pecas', relatorio.consumo_pecas)],
+        ['Consumo de pneus', opcaoLabel('consumo_pneus', relatorio.consumo_pneus)],
+        ['Consumo de rodas', opcaoLabel('consumo_rodas', relatorio.consumo_rodas)],
       ]} />
 
       <Bloco titulo="Projetos futuros" itens={[
-        ['Existe projeto futuro?', relatorio.existe_projeto_futuro || '-'],
-        ['Tipo de projeto', relatorio.tipo_projeto || '-'],
-        ['Prazo estimado', relatorio.prazo_estimado || '-'],
-        ['Oportunidades identificadas', relatorio.oportunidades_identificadas || '-'],
+        ['Existe projeto futuro?', opcaoLabel('projeto_futuro', relatorio.projeto_futuro)],
+        ['Tipo de projeto', relatorio.tipo_projeto === 'Outros' ? relatorio.tipo_projeto_outro : opcaoLabel('tipo_projeto', relatorio.tipo_projeto)],
+        ['Prazo', opcaoLabel('prazo_projeto', relatorio.prazo_projeto)],
       ]} />
 
-      <Bloco titulo="Descrição geral" itens={[[null, relatorio.descricao_geral || '-']]} />
+      <Bloco titulo="Oportunidades identificadas" itens={[
+        [null, (relatorio.oportunidades || []).length > 0
+          ? relatorio.oportunidades.map(k => OPORTUNIDADES_OPCOES.find(o => o.key === k)?.label || k).join(', ')
+          : 'Nenhuma'],
+      ]} />
+
+      <Bloco titulo="Aderência e potencial" itens={[
+        ['Aderência', opcaoLabel('aderencia', relatorio.aderencia)],
+        ['Estimativa de custo mensal', opcaoLabel('custo_mensal_estimado', relatorio.custo_mensal_estimado)],
+      ]} />
+
+      <Bloco titulo="Comentários" itens={[[null, relatorio.comentarios || relatorio.descricao_geral || '-']]} />
 
       {relatorio.fotos && relatorio.fotos.length > 0 && (
         <div style={{ background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 14, marginBottom: 12 }}>
@@ -392,17 +443,19 @@ function VisualizarRelatorio({ relatorio, onFechar, onAbrirNegocio }) {
           </div>
         </div>
       )}
-
-      {relatorio.negocio_id && (
-        <div style={{ marginTop: 16 }}>
-          <Secao titulo="Score PCI">
-            <div style={{ background: '#fff', borderRadius: 10, padding: 14 }}>
-              <PciForm negocioId={relatorio.negocio_id} />
-            </div>
-          </Secao>
-        </div>
-      )}
     </div>
+  )
+}
+
+function SelectPontuado({ def, valor, onChange }) {
+  if (!def) return null
+  return (
+    <Campo label={`${def.label} (máx. ${def.max} pts)`}>
+      <select value={valor} onChange={e => onChange(e.target.value)} style={inputStyle}>
+        <option value="">-</option>
+        {def.opcoes.map(o => <option key={o.key} value={o.key}>{o.label} ({o.pontos} pts)</option>)}
+      </select>
+    </Campo>
   )
 }
 

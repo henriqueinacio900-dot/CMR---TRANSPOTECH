@@ -254,6 +254,226 @@ export function classificarValorCliente(valor) {
   return null
 }
 
+// ============================================================
+// PCI NOVO — o relatório de visita inteiro É o PCI. Cada resposta
+// tem um peso; a soma máxima de tudo dá exatamente 100 pontos.
+// ============================================================
+
+export const SEGMENTOS = [
+  'Centros de distribuição e operadores logísticos',
+  'Supermercados, atacarejos e distribuidores de alimentos',
+  'Indústrias de alimentos e bebidas',
+  'Indústrias metalúrgicas e siderúrgicas',
+  'Indústrias de máquinas e equipamentos',
+  'Indústrias automotivas e de autopeças',
+  'Indústrias químicas e petroquímicas',
+  'Indústrias farmacêuticas e de cosméticos',
+  'Indústrias de plástico e borracha',
+  'Indústrias de papel, celulose e embalagens',
+  'Madeireiras, serrarias e indústrias de móveis',
+  'Construção civil e distribuidores de materiais de construção',
+  'Agronegócio, cooperativas e armazenagem de grãos',
+  'Portos, terminais de carga e recintos aduaneiros',
+  'Empresas de reciclagem, sucata e gestão de resíduos',
+  'Outros',
+]
+
+export const PRODUTOS_MOVIMENTADOS = [
+  'Paletes e cargas paletizadas',
+  'Bobinas e amarrados de aço',
+  'Produtos químicos',
+  'Alimentos e bebidas',
+  'Madeira, papel e celulose',
+  'Materiais de construção',
+  'Máquinas, peças e equipamentos',
+  'Outros',
+]
+
+export const TIPOS_PROJETO = [
+  'Expansão de frota',
+  'Renovação de frota',
+  'Troca de baterias',
+  'Reformas',
+  'Projeto segurança',
+  'PM2P',
+  'Homologação de novo fornecedor',
+  'Outros',
+]
+
+export const OPORTUNIDADES_OPCOES = [
+  { key: 'pecas', label: 'Fornecimento de peças' },
+  { key: 'spot', label: 'SPOT' },
+  { key: 'rodas', label: 'Fornecimento de rodas (poliuretano)' },
+  { key: 'pneus', label: 'Fornecimento de pneus' },
+  { key: 'baterias', label: 'Fornecimento de baterias' },
+  { key: 'pm2p', label: 'Contrato PM2P' },
+  { key: 'tecnologias', label: 'Fornecimento de novas tecnologias' },
+]
+
+// Cada campo: { chave, label, opcoes: [{key,label,pontos}], max }
+export const CAMPOS_PCI = [
+  {
+    chave: 'tipo_operacao', label: 'Tipo de operação', max: 5,
+    opcoes: [
+      { key: 'leve', label: 'Leve', pontos: 1 },
+      { key: 'media', label: 'Média', pontos: 3 },
+      { key: 'severa', label: 'Severa', pontos: 5 },
+    ],
+  },
+  {
+    chave: 'tipo_piso', label: 'Tipo de piso', max: 5,
+    opcoes: [
+      { key: 'excelente', label: 'Excelente (piso epóxi)', pontos: 1 },
+      { key: 'bom', label: 'Bom (piso plano, sem buracos e emendas)', pontos: 2 },
+      { key: 'medio', label: 'Médio (piso plano, com alguns buracos e emendas)', pontos: 3 },
+      { key: 'ruim', label: 'Ruim (piso irregular ou com muitos buracos)', pontos: 4 },
+      { key: 'agressivo', label: 'Agressivo (abrasivo, irregular, lama, buraco e poças)', pontos: 5 },
+    ],
+  },
+  {
+    chave: 'turnos', label: 'Turnos', max: 5,
+    opcoes: [
+      { key: '1', label: '1 turno', pontos: 1 },
+      { key: '2', label: '2 turnos', pontos: 3 },
+      { key: '3', label: '3 turnos', pontos: 5 },
+    ],
+  },
+  {
+    chave: 'dias_semana', label: 'Dias da semana de operação', max: 3,
+    opcoes: [
+      { key: 'seg_sex', label: 'Seg a Sex', pontos: 1 },
+      { key: 'seg_sab', label: 'Seg a Sáb', pontos: 2 },
+      { key: 'seg_dom', label: 'Seg a Dom', pontos: 3 },
+    ],
+  },
+  {
+    chave: 'qtd_maquinas_faixa', label: 'Total de máquinas', max: 10,
+    opcoes: [
+      { key: '1a3', label: '1 a 3', pontos: 2 },
+      { key: '4a10', label: '4 a 10', pontos: 5 },
+      { key: '11a30', label: '11 a 30', pontos: 8 },
+      { key: 'acima30', label: 'Acima de 30', pontos: 10 },
+    ],
+  },
+  {
+    chave: 'manutencao_interna', label: 'Possui manutenção interna?', max: 4,
+    opcoes: [
+      { key: 'sim', label: 'Sim', pontos: 1 },
+      { key: 'nao', label: 'Não', pontos: 4 },
+    ],
+  },
+  {
+    chave: 'tecnico_interno', label: 'Possui técnico interno?', max: 4,
+    opcoes: [
+      { key: 'sim', label: 'Sim', pontos: 1 },
+      { key: 'nao', label: 'Não', pontos: 4 },
+    ],
+  },
+  {
+    chave: 'consumo_pecas', label: 'Consumo de peças', max: 5,
+    opcoes: [
+      { key: 'baixo', label: 'Baixo', pontos: 1 },
+      { key: 'medio', label: 'Médio', pontos: 3 },
+      { key: 'alto', label: 'Alto', pontos: 5 },
+    ],
+  },
+  {
+    chave: 'consumo_pneus', label: 'Consumo de pneus', max: 4,
+    opcoes: [
+      { key: 'baixo', label: 'Baixo', pontos: 1 },
+      { key: 'medio', label: 'Médio', pontos: 2 },
+      { key: 'alto', label: 'Alto', pontos: 4 },
+    ],
+  },
+  {
+    chave: 'consumo_rodas', label: 'Consumo de rodas (poliuretano)', max: 4,
+    opcoes: [
+      { key: 'baixo', label: 'Baixo', pontos: 1 },
+      { key: 'medio', label: 'Médio', pontos: 2 },
+      { key: 'alto', label: 'Alto', pontos: 4 },
+    ],
+  },
+  {
+    chave: 'projeto_futuro', label: 'Existe projeto futuro?', max: 4,
+    opcoes: [
+      { key: 'nao', label: 'Não', pontos: 0 },
+      { key: 'sim', label: 'Sim', pontos: 4 },
+    ],
+  },
+  {
+    chave: 'tipo_projeto', label: 'Tipo de projeto', max: 6,
+    opcoes: [
+      { key: 'Expansão de frota', label: 'Expansão de frota', pontos: 3 },
+      { key: 'Renovação de frota', label: 'Renovação de frota', pontos: 3 },
+      { key: 'Troca de baterias', label: 'Troca de baterias', pontos: 6 },
+      { key: 'Reformas', label: 'Reformas', pontos: 6 },
+      { key: 'Projeto segurança', label: 'Projeto segurança', pontos: 6 },
+      { key: 'PM2P', label: 'PM2P', pontos: 6 },
+      { key: 'Homologação de novo fornecedor', label: 'Homologação de novo fornecedor', pontos: 3 },
+      { key: 'Outros', label: 'Outros', pontos: 3 },
+    ],
+  },
+  {
+    chave: 'prazo_projeto', label: 'Prazo', max: 6,
+    opcoes: [
+      { key: 'imediato', label: 'Imediato', pontos: 6 },
+      { key: 'trimestre', label: 'Próximo trimestre', pontos: 4 },
+      { key: 'semestre', label: 'Próximo semestre', pontos: 3 },
+      { key: 'ano', label: 'Próximo ano', pontos: 1 },
+      { key: 'sem_prazo', label: 'Sem prazo definido', pontos: 0 },
+    ],
+  },
+  {
+    chave: 'contato_perfil', label: 'Contato', max: 8,
+    opcoes: [
+      { key: 'nao_sabemos', label: 'Não sabemos', pontos: 1 },
+      { key: 'influenciador', label: 'Influenciador', pontos: 4 },
+      { key: 'decisor', label: 'Decisor identificado', pontos: 8 },
+    ],
+  },
+  {
+    chave: 'aderencia', label: 'Aderência', max: 10,
+    opcoes: [
+      { key: 'baixa', label: 'Baixa aderência', pontos: 1 },
+      { key: 'possivel', label: 'Atendimento possível', pontos: 4 },
+      { key: 'boa', label: 'Boa aderência', pontos: 7 },
+      { key: 'alto_potencial', label: 'Cliente com alto potencial', pontos: 10 },
+    ],
+  },
+  {
+    chave: 'custo_mensal_estimado', label: 'Estimativa de custo mensal (cliente)', max: 10,
+    opcoes: [
+      { key: 'ate2k', label: 'Até R$ 2.000', pontos: 1 },
+      { key: '2ka10k', label: 'De R$ 2.000,01 até R$ 10.000,00', pontos: 4 },
+      { key: '10ka30k', label: 'De R$ 10.000,01 até R$ 30.000,00', pontos: 7 },
+      { key: 'acima30k', label: 'Acima de R$ 30.000', pontos: 10 },
+    ],
+  },
+]
+
+// Oportunidades: multi-seleção, 1 ponto cada, até 7 pontos no total
+export const MAX_PONTOS_OPORTUNIDADES = 7
+export const MAX_PCI = 100 // soma de todos os "max" acima + oportunidades = 100
+
+export function calcularNotaPCI(respostas, oportunidadesSelecionadas) {
+  let total = 0
+  CAMPOS_PCI.forEach(campo => {
+    const valorEscolhido = respostas[campo.chave]
+    const opcao = campo.opcoes.find(o => o.key === valorEscolhido)
+    if (opcao) total += opcao.pontos
+  })
+  total += (oportunidadesSelecionadas || []).length * 1 // 1 ponto cada, máx 7
+  return Math.round(total * 10) / 10
+}
+
+export function classificarPciNovo(nota) {
+  if (nota === null || nota === undefined) return { label: 'Não avaliado', cor: '#999' }
+  if (nota <= 30) return { label: 'Cliente Frio', cor: '#2F6FB0' }
+  if (nota <= 60) return { label: 'Cliente Médio', cor: '#B7950B' }
+  if (nota <= 80) return { label: 'Cliente Quente', cor: '#E08E00' }
+  return { label: 'Cliente Estratégico', cor: '#3b6d11' }
+}
+
 export function classificarPci(notaTotal) {
   if (notaTotal >= 23) return { sigla: 'A', label: 'Muito quente', cor: '#a32d2d' }
   if (notaTotal >= 17) return { sigla: 'B', label: 'Alto potencial', cor: '#993C1D' }

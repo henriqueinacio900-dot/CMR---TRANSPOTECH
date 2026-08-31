@@ -381,7 +381,7 @@ export async function listarHistorico(negocioId) {
 export async function listarTodosClientes() {
   const { data, error } = await supabase
     .from('clientes')
-    .select('id, razao_social, nome_fantasia, cnpj, cidade, estado, telefone_whats, status_cliente, departamento_id, qtd_maquinas_estimada, observacoes_gerais, departamento:departamentos(id, nome)')
+    .select('id, razao_social, nome_fantasia, cnpj, cidade, estado, telefone_whats, status_cliente, departamento_id, qtd_maquinas_estimada, observacoes_gerais, pci_nota, pci_classificacao, departamento:departamentos(id, nome)')
     .order('razao_social')
   if (error) { console.error(error); return [] }
   return data
@@ -701,6 +701,7 @@ export async function buscarRelatorioPorAtividade(atividadeId) {
 
 export async function salvarRelatorioVisita(dados, id) {
   const consultor = await getMeuConsultor()
+  let resultado
   if (id) {
     const { data, error } = await supabase
       .from('relatorios_visita')
@@ -709,15 +710,38 @@ export async function salvarRelatorioVisita(dados, id) {
       .select()
       .single()
     if (error) throw error
-    return data
+    resultado = data
+  } else {
+    const { data, error } = await supabase
+      .from('relatorios_visita')
+      .insert({ ...dados, consultor_id: consultor?.id })
+      .select()
+      .single()
+    if (error) throw error
+    resultado = data
   }
-  const { data, error } = await supabase
-    .from('relatorios_visita')
-    .insert({ ...dados, consultor_id: consultor?.id })
-    .select()
+
+  // Propaga a nota PCI calculada pro cadastro do cliente, pra ficar em destaque lá
+  if (resultado.negocio_id && dados.nota_pci !== undefined && dados.nota_pci !== null) {
+    await atualizarPciDoClientePorNegocio(resultado.negocio_id, dados.nota_pci, dados.pci_classificacao)
+  }
+
+  return resultado
+}
+
+async function atualizarPciDoClientePorNegocio(negocioId, nota, classificacao) {
+  const { data: negocio, error: erroNegocio } = await supabase
+    .from('negocios')
+    .select('cliente_id')
+    .eq('id', negocioId)
     .single()
-  if (error) throw error
-  return data
+  if (erroNegocio || !negocio) { console.error('Erro ao achar cliente do negócio:', erroNegocio); return }
+
+  const { error } = await supabase
+    .from('clientes')
+    .update({ pci_nota: nota, pci_classificacao: classificacao, pci_atualizado_em: new Date().toISOString() })
+    .eq('id', negocio.cliente_id)
+  if (error) console.error('Erro ao atualizar PCI do cliente:', error)
 }
 
 export async function uploadFotoRelatorio(arquivo) {

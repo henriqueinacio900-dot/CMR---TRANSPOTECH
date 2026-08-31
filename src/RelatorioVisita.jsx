@@ -518,125 +518,232 @@ async function imagemParaBase64(url) {
 }
 
 async function gerarPdfRelatorio(relatorio, opcaoLabel) {
-  const doc = new jsPDF()
-  const laranja = [247, 126, 1]
-  let y = 20
-
-  doc.setFillColor(...laranja)
-  doc.rect(0, 0, 210, 22, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(14)
-  doc.text('Relatório de Visita Comercial — PCI', 14, 14)
-
-  doc.setTextColor(20, 20, 20)
-  y = 32
-  doc.setFontSize(16)
-  doc.text(relatorio.empresa || '-', 14, y)
-  y += 8
-
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const COR = { laranja: [247, 126, 1], preto: [20, 20, 20], cinza: [104, 112, 120], claro: [245, 246, 247], linha: [222, 225, 228], branco: [255, 255, 255], verde: [30, 142, 82] }
   const classif = classificarPciNovo(relatorio.nota_pci)
-  doc.setFontSize(13)
-  doc.setTextColor(...laranja)
-  doc.text(`Nota PCI: ${relatorio.nota_pci ?? '-'} / 100 — ${classif.label}`, 14, y)
-  doc.setTextColor(20, 20, 20)
-  y += 10
+  const oportunidades = relatorio.oportunidades || []
+  const dataVisita = relatorio.data_visita ? new Date(relatorio.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-'
+  const cidadeUf = `${relatorio.cidade || '-'}${relatorio.estado ? ' / ' + relatorio.estado : ''}`
+  const frotaInformada = [relatorio.qtd_eletricas, relatorio.qtd_glp, relatorio.qtd_diesel].reduce((s, n) => s + (Number(n) || 0), 0)
+  let y = 0
 
-  function linha(rotulo, valor) {
-    if (y > 275) { doc.addPage(); y = 20 }
+  const texto = (valor, fallback = '-') => valor === null || valor === undefined || valor === '' ? fallback : String(valor)
+  const valorCampo = (chave) => opcaoLabel(chave, relatorio[chave])
+  const pontosCampo = (chave) => {
+    const def = campo(chave)
+    const op = def?.opcoes?.find(o => o.key === relatorio[chave])
+    return { pontos: op?.pontos ?? 0, max: def?.max ?? 0 }
+  }
+
+  function marca() {
+    doc.setFillColor(...COR.laranja)
+    doc.triangle(14, 9, 22, 9, 18, 16, 'F')
+    doc.setFillColor(...COR.preto)
+    doc.triangle(15.5, 10.5, 20.5, 10.5, 18, 14.5, 'F')
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(15)
+    doc.setTextColor(...COR.preto)
+    doc.text('TranspoTech', 26, 15)
+  }
+
+  function cabecalho(titulo, subtitulo) {
+    doc.setFillColor(...COR.branco)
+    doc.rect(0, 0, 210, 25, 'F')
+    marca()
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...COR.preto)
+    doc.text(titulo.toUpperCase(), 196, 11, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...COR.cinza)
+    doc.text(subtitulo, 196, 16, { align: 'right' })
+    doc.setFillColor(...COR.laranja)
+    doc.rect(0, 23, 210, 2, 'F')
+    y = 34
+  }
+
+  function tituloSecao(titulo, detalhe = '') {
+    if (y > 265) { doc.addPage(); cabecalho('Relatório de visita comercial', relatorio.empresa || '-') }
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(10)
-    doc.setFont(undefined, 'bold')
-    doc.text(`${rotulo}:`, 14, y)
-    doc.setFont(undefined, 'normal')
-    const texto = doc.splitTextToSize(String(valor ?? '-'), 140)
-    doc.text(texto, 60, y)
-    y += 6 * texto.length
+    doc.setTextColor(...COR.preto)
+    doc.text(titulo.toUpperCase(), 14, y)
+    if (detalhe) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(...COR.cinza)
+      doc.text(detalhe, 196, y, { align: 'right' })
+    }
+    doc.setDrawColor(...COR.laranja)
+    doc.setLineWidth(0.6)
+    doc.line(14, y + 3, 196, y + 3)
+    y += 9
   }
 
-  function tituloSecao(t) {
-    if (y > 270) { doc.addPage(); y = 20 }
-    y += 4
-    doc.setFontSize(11)
-    doc.setFont(undefined, 'bold')
-    doc.setTextColor(...laranja)
-    doc.text(t, 14, y)
-    doc.setTextColor(20, 20, 20)
-    doc.setFont(undefined, 'normal')
-    y += 6
+  function card(x, topo, largura, altura, rotulo, valor, corValor = COR.preto) {
+    doc.setFillColor(...COR.claro)
+    doc.roundedRect(x, topo, largura, altura, 2, 2, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...COR.cinza)
+    doc.text(rotulo.toUpperCase(), x + 4, topo + 6)
+    doc.setFontSize(13)
+    doc.setTextColor(...corValor)
+    const linhas = doc.splitTextToSize(texto(valor), largura - 8)
+    doc.text(linhas.slice(0, 2), x + 4, topo + 14)
   }
 
-  tituloSecao('Dados da visita')
-  linha('Cidade/UF', `${relatorio.cidade || '-'} ${relatorio.estado ? '/' + relatorio.estado : ''}`)
-  linha('Data da visita', relatorio.data_visita ? new Date(relatorio.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-')
-  linha('Consultor', relatorio.consultor?.nome || '-')
+  function parLinha(rotulo, valor, x = 14, largura = 182) {
+    const linhas = doc.splitTextToSize(texto(valor), largura - 51)
+    const altura = Math.max(7, linhas.length * 4.2 + 2)
+    if (y + altura > 277) { doc.addPage(); cabecalho('Relatório de visita comercial', relatorio.empresa || '-') }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.2)
+    doc.setTextColor(...COR.cinza)
+    doc.text(rotulo, x, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...COR.preto)
+    doc.text(linhas, x + 49, y)
+    doc.setDrawColor(...COR.linha)
+    doc.line(x, y + altura - 2, x + largura, y + altura - 2)
+    y += altura
+  }
 
-  tituloSecao('Contato principal')
-  linha('Nome', relatorio.contato_nome)
-  linha('Cargo', relatorio.contato_cargo)
-  linha('Perfil', opcaoLabel('contato_perfil', relatorio.contato_perfil))
+  // Página 1 - visão executiva
+  cabecalho('Relatório de visita comercial', `PCI | ${dataVisita}`)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.setTextColor(...COR.preto)
+  doc.text(texto(relatorio.empresa).toUpperCase(), 14, y + 4)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...COR.cinza)
+  doc.text(`${cidadeUf}  |  Consultor: ${texto(relatorio.consultor?.nome)}`, 14, y + 11)
+  y += 20
 
-  tituloSecao('Perfil da operação')
-  linha('Segmento', relatorio.segmento === 'Outros' ? relatorio.segmento_outro : relatorio.segmento)
-  linha('Produto movimentado', relatorio.produto_movimentado === 'Outros' ? relatorio.produto_outro : relatorio.produto_movimentado)
-  linha('Tipo de operação', opcaoLabel('tipo_operacao', relatorio.tipo_operacao))
-  linha('Tipo de piso', opcaoLabel('tipo_piso', relatorio.tipo_piso))
-  linha('Turnos', opcaoLabel('turnos', relatorio.turnos))
-  linha('Dias de operação', opcaoLabel('dias_semana', relatorio.dias_semana))
+  doc.setFillColor(...COR.preto)
+  doc.roundedRect(14, y, 182, 36, 3, 3, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...COR.branco)
+  doc.text('POTENCIAL COMERCIAL IDENTIFICADO', 20, y + 9)
+  doc.setFontSize(25)
+  doc.setTextColor(...COR.laranja)
+  doc.text(`${relatorio.nota_pci ?? '-'} / 100`, 20, y + 25)
+  doc.setFontSize(14)
+  doc.setTextColor(...COR.branco)
+  doc.text(classif.label, 188, y + 23, { align: 'right' })
+  y += 43
 
-  tituloSecao('Frota de empilhadeiras')
-  linha('Total de máquinas', opcaoLabel('qtd_maquinas_faixa', relatorio.qtd_maquinas_faixa))
-  linha('Elétricas / GLP / Diesel', `${relatorio.qtd_eletricas ?? 0} / ${relatorio.qtd_glp ?? 0} / ${relatorio.qtd_diesel ?? 0}`)
-  linha('Classes I-V', `${relatorio.qtd_classe_i ?? 0} / ${relatorio.qtd_classe_ii ?? 0} / ${relatorio.qtd_classe_iii ?? 0} / ${relatorio.qtd_classe_iv ?? 0} / ${relatorio.qtd_classe_v ?? 0}`)
+  card(14, y, 57, 27, 'Frota informada', frotaInformada > 0 ? `${frotaInformada} máquinas` : valorCampo('qtd_maquinas_faixa'))
+  card(76.5, y, 57, 27, 'Oportunidades', `${oportunidades.length} identificadas`, COR.laranja)
+  card(139, y, 57, 27, 'Custo mensal', valorCampo('custo_mensal_estimado'))
+  y += 36
 
-  tituloSecao('Manutenção e consumo')
-  linha('Manutenção interna', opcaoLabel('manutencao_interna', relatorio.manutencao_interna))
-  linha('Técnico interno', opcaoLabel('tecnico_interno', relatorio.tecnico_interno))
-  linha('Consumo de peças', opcaoLabel('consumo_pecas', relatorio.consumo_pecas))
-  linha('Consumo de pneus', opcaoLabel('consumo_pneus', relatorio.consumo_pneus))
-  linha('Consumo de rodas', opcaoLabel('consumo_rodas', relatorio.consumo_rodas))
+  tituloSecao('Leitura executiva')
+  parLinha('Contato-chave', `${texto(relatorio.contato_nome)} - ${texto(relatorio.contato_cargo)} (${valorCampo('contato_perfil')})`)
+  parLinha('Operação', `${valorCampo('tipo_operacao')} | ${valorCampo('turnos')} | ${valorCampo('dias_semana')}`)
+  parLinha('Cenário técnico', `Manutenção interna: ${valorCampo('manutencao_interna')} | Técnico interno: ${valorCampo('tecnico_interno')}`)
+  parLinha('Projeto futuro', `${valorCampo('projeto_futuro')} | ${relatorio.tipo_projeto === 'Outros' ? texto(relatorio.tipo_projeto_outro) : valorCampo('tipo_projeto')} | ${valorCampo('prazo_projeto')}`)
+  parLinha('Aderência', valorCampo('aderencia'))
+  y += 4
 
-  tituloSecao('Projetos futuros')
-  linha('Existe projeto futuro?', opcaoLabel('projeto_futuro', relatorio.projeto_futuro))
-  linha('Tipo de projeto', relatorio.tipo_projeto === 'Outros' ? relatorio.tipo_projeto_outro : opcaoLabel('tipo_projeto', relatorio.tipo_projeto))
-  linha('Prazo', opcaoLabel('prazo_projeto', relatorio.prazo_projeto))
+  tituloSecao('Oportunidades prioritárias', `${oportunidades.length} frente(s)`)
+  if (oportunidades.length) {
+    oportunidades.forEach((chave, i) => {
+      const label = OPORTUNIDADES_OPCOES.find(o => o.key === chave)?.label || chave
+      doc.setFillColor(...COR.claro)
+      doc.circle(18, y - 1, 3, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...COR.laranja)
+      doc.text(String(i + 1), 18, y, { align: 'center' })
+      doc.setTextColor(...COR.preto)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.text(label, 25, y)
+      y += 8
+    })
+  } else {
+    parLinha('Status', 'Nenhuma oportunidade registrada na visita.')
+  }
 
-  tituloSecao('Oportunidades identificadas')
-  linha('', (relatorio.oportunidades || []).length > 0
-    ? relatorio.oportunidades.map(k => OPORTUNIDADES_OPCOES.find(o => o.key === k)?.label || k).join(', ')
-    : 'Nenhuma')
+  // Página 2 - diagnóstico e pontuação
+  doc.addPage()
+  cabecalho('Diagnóstico PCI', `${texto(relatorio.empresa)} | Nota ${relatorio.nota_pci ?? '-'} / 100`)
+  tituloSecao('Composição da pontuação', 'Critério | resposta | pontos')
+  const criterios = [
+    ['contato_perfil', 'Perfil do contato'], ['tipo_operacao', 'Tipo de operação'], ['tipo_piso', 'Condição do piso'],
+    ['turnos', 'Turnos'], ['dias_semana', 'Dias de operação'], ['qtd_maquinas_faixa', 'Tamanho da frota'],
+    ['manutencao_interna', 'Manutenção interna'], ['tecnico_interno', 'Técnico interno'], ['consumo_pecas', 'Consumo de peças'],
+    ['consumo_pneus', 'Consumo de pneus'], ['consumo_rodas', 'Consumo de rodas'], ['projeto_futuro', 'Projeto futuro'],
+    ['tipo_projeto', 'Tipo de projeto'], ['prazo_projeto', 'Prazo do projeto'], ['aderencia', 'Aderência'], ['custo_mensal_estimado', 'Custo mensal estimado'],
+  ].filter(([chave]) => campo(chave))
 
-  tituloSecao('Aderência e potencial')
-  linha('Aderência', opcaoLabel('aderencia', relatorio.aderencia))
-  linha('Estimativa de custo mensal', opcaoLabel('custo_mensal_estimado', relatorio.custo_mensal_estimado))
+  criterios.forEach(([chave, label], indice) => {
+    const p = pontosCampo(chave)
+    const altura = 10
+    if (y + altura > 276) { doc.addPage(); cabecalho('Diagnóstico PCI', texto(relatorio.empresa)); tituloSecao('Composição da pontuação - continuação') }
+    if (indice % 2 === 0) { doc.setFillColor(...COR.claro); doc.rect(14, y - 5, 182, altura, 'F') }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...COR.preto); doc.text(label, 18, y)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...COR.cinza)
+    doc.text(doc.splitTextToSize(valorCampo(chave), 83)[0], 80, y)
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...COR.laranja)
+    doc.text(`${p.pontos} / ${p.max}`, 190, y, { align: 'right' })
+    y += altura
+  })
 
-  tituloSecao('Comentários')
-  linha('', relatorio.comentarios || relatorio.descricao_geral || '-')
+  y += 3
+  tituloSecao('Dados complementares da operação')
+  parLinha('Segmento', relatorio.segmento === 'Outros' ? relatorio.segmento_outro : relatorio.segmento)
+  parLinha('Produto movimentado', relatorio.produto_movimentado === 'Outros' ? relatorio.produto_outro : relatorio.produto_movimentado)
+  parLinha('Matriz energética', `Elétricas: ${relatorio.qtd_eletricas ?? 0} | GLP: ${relatorio.qtd_glp ?? 0} | Diesel: ${relatorio.qtd_diesel ?? 0}`)
+  parLinha('Classes I a V', `${relatorio.qtd_classe_i ?? 0} | ${relatorio.qtd_classe_ii ?? 0} | ${relatorio.qtd_classe_iii ?? 0} | ${relatorio.qtd_classe_iv ?? 0} | ${relatorio.qtd_classe_v ?? 0}`)
+  parLinha('Comentários', relatorio.comentarios || relatorio.descricao_geral || '-')
 
+  // Páginas finais - evidências fotográficas sem distorção
   const fotos = normalizarFotos(relatorio.fotos)
   if (fotos.length > 0) {
     doc.addPage()
-    y = 20
-    tituloSecao(`Fotos da visita (${fotos.length})`)
-    let x = 14
-    const largura = 85
-    const altura = 60
+    cabecalho('Evidências da visita', `${texto(relatorio.empresa)} | ${fotos.length} foto(s)`)
+    tituloSecao('Registro fotográfico')
     let coluna = 0
-    for (const url of fotos) {
+    const caixaW = 87
+    const caixaH = 72
+    for (let i = 0; i < fotos.length; i++) {
       try {
-        const base64 = await imagemParaBase64(url)
-        if (y + altura > 280) { doc.addPage(); y = 20; x = 14; coluna = 0 }
-        doc.addImage(base64, undefined, x, y, largura, altura, undefined, 'FAST')
-        if (coluna === 0) {
-          x = 14 + largura + 6
-          coluna = 1
-        } else {
-          x = 14
-          coluna = 0
-          y += altura + 6
-        }
+        const base64 = await imagemParaBase64(fotos[i])
+        if (y + caixaH > 273) { doc.addPage(); cabecalho('Evidências da visita', texto(relatorio.empresa)); tituloSecao('Registro fotográfico - continuação'); coluna = 0 }
+        const x = coluna === 0 ? 14 : 109
+        doc.setFillColor(...COR.claro)
+        doc.roundedRect(x, y, caixaW, caixaH, 2, 2, 'F')
+        const props = doc.getImageProperties(base64)
+        const escala = Math.min((caixaW - 4) / props.width, (caixaH - 10) / props.height)
+        const w = props.width * escala
+        const h = props.height * escala
+        doc.addImage(base64, undefined, x + (caixaW - w) / 2, y + 3, w, h, undefined, 'FAST')
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...COR.cinza)
+        doc.text(`Foto ${i + 1}`, x + 4, y + caixaH - 3)
+        if (coluna === 0) coluna = 1
+        else { coluna = 0; y += caixaH + 7 }
       } catch (e) {
         console.error('Não deu pra incluir uma foto no PDF:', e)
       }
     }
+  }
+
+  // Rodapé corporativo e paginação
+  const totalPaginas = doc.getNumberOfPages()
+  for (let pagina = 1; pagina <= totalPaginas; pagina++) {
+    doc.setPage(pagina)
+    doc.setDrawColor(...COR.linha)
+    doc.line(14, 287, 196, 287)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...COR.cinza)
+    doc.text('TranspoTech | Soluções em Equipamentos de Movimentação', 14, 292)
+    doc.text(`Página ${pagina} de ${totalPaginas}`, 196, 292, { align: 'right' })
   }
 
   const nomeArquivo = `relatorio-visita-${(relatorio.empresa || 'cliente').replace(/[^a-zA-Z0-9]/g, '-')}.pdf`

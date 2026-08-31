@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import jsPDF from 'jspdf'
 import { listarRelatoriosVisita, buscarRelatorioPorAtividade, salvarRelatorioVisita, uploadFotoRelatorio } from './api'
 import {
   SEGMENTOS, PRODUTOS_MOVIMENTADOS, CAMPOS_PCI, OPORTUNIDADES_OPCOES,
@@ -326,7 +327,9 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 10 }}>
           {fotos.map(url => (
             <div key={url} style={{ position: 'relative' }}>
-              <img src={url} alt="Foto da visita" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6, border: `1px solid ${TEMA.linhaInterna}` }} />
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                <img src={url} alt="Foto da visita" style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6, border: `1px solid ${TEMA.linhaInterna}`, display: 'block', cursor: 'zoom-in' }} />
+              </a>
               <button
                 type="button" onClick={() => removerFoto(url)}
                 style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer', lineHeight: '20px', padding: 0 }}
@@ -359,10 +362,22 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
 function VisualizarRelatorio({ relatorio, onFechar }) {
   const classif = classificarPciNovo(relatorio.nota_pci)
   const opcaoLabel = (chave, valor) => campo(chave)?.opcoes.find(o => o.key === valor)?.label || valor || '-'
+  const [gerandoPdf, setGerandoPdf] = useState(false)
+
+  async function gerarPdf() {
+    setGerandoPdf(true)
+    try {
+      await gerarPdfRelatorio(relatorio, opcaoLabel)
+    } catch (e) {
+      alert('Não deu pra gerar o PDF: ' + (e.message || 'erro desconhecido'))
+    } finally {
+      setGerandoPdf(false)
+    }
+  }
 
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal, maxWidth: 700, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{relatorio.empresa}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
@@ -371,6 +386,12 @@ function VisualizarRelatorio({ relatorio, onFechar }) {
           }}>
             {relatorio.nota_pci ?? '—'} / 100 — {classif.label}
           </span>
+          <button
+            onClick={gerarPdf} disabled={gerandoPdf}
+            style={{ background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            {gerandoPdf ? 'Gerando...' : '⬇ Gerar PDF'}
+          </button>
           <button onClick={onFechar} style={{ background: 'none', border: 'none', color: TEMA.textoSecundario, fontSize: 13, cursor: 'pointer' }}>Voltar</button>
         </div>
       </div>
@@ -445,6 +466,142 @@ function VisualizarRelatorio({ relatorio, onFechar }) {
       )}
     </div>
   )
+}
+
+async function imagemParaBase64(url) {
+  const resp = await fetch(url)
+  const blob = await resp.blob()
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader()
+    leitor.onload = () => resolve(leitor.result)
+    leitor.onerror = reject
+    leitor.readAsDataURL(blob)
+  })
+}
+
+async function gerarPdfRelatorio(relatorio, opcaoLabel) {
+  const doc = new jsPDF()
+  const laranja = [247, 126, 1]
+  let y = 20
+
+  doc.setFillColor(...laranja)
+  doc.rect(0, 0, 210, 22, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(14)
+  doc.text('Relatório de Visita Comercial — PCI', 14, 14)
+
+  doc.setTextColor(20, 20, 20)
+  y = 32
+  doc.setFontSize(16)
+  doc.text(relatorio.empresa || '-', 14, y)
+  y += 8
+
+  const classif = classificarPciNovo(relatorio.nota_pci)
+  doc.setFontSize(13)
+  doc.setTextColor(...laranja)
+  doc.text(`Nota PCI: ${relatorio.nota_pci ?? '-'} / 100 — ${classif.label}`, 14, y)
+  doc.setTextColor(20, 20, 20)
+  y += 10
+
+  function linha(rotulo, valor) {
+    if (y > 275) { doc.addPage(); y = 20 }
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'bold')
+    doc.text(`${rotulo}:`, 14, y)
+    doc.setFont(undefined, 'normal')
+    const texto = doc.splitTextToSize(String(valor ?? '-'), 140)
+    doc.text(texto, 60, y)
+    y += 6 * texto.length
+  }
+
+  function tituloSecao(t) {
+    if (y > 270) { doc.addPage(); y = 20 }
+    y += 4
+    doc.setFontSize(11)
+    doc.setFont(undefined, 'bold')
+    doc.setTextColor(...laranja)
+    doc.text(t, 14, y)
+    doc.setTextColor(20, 20, 20)
+    doc.setFont(undefined, 'normal')
+    y += 6
+  }
+
+  tituloSecao('Dados da visita')
+  linha('Cidade/UF', `${relatorio.cidade || '-'} ${relatorio.estado ? '/' + relatorio.estado : ''}`)
+  linha('Data da visita', relatorio.data_visita ? new Date(relatorio.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-')
+  linha('Consultor', relatorio.consultor?.nome || '-')
+
+  tituloSecao('Contato principal')
+  linha('Nome', relatorio.contato_nome)
+  linha('Cargo', relatorio.contato_cargo)
+  linha('Perfil', opcaoLabel('contato_perfil', relatorio.contato_perfil))
+
+  tituloSecao('Perfil da operação')
+  linha('Segmento', relatorio.segmento === 'Outros' ? relatorio.segmento_outro : relatorio.segmento)
+  linha('Produto movimentado', relatorio.produto_movimentado === 'Outros' ? relatorio.produto_outro : relatorio.produto_movimentado)
+  linha('Tipo de operação', opcaoLabel('tipo_operacao', relatorio.tipo_operacao))
+  linha('Tipo de piso', opcaoLabel('tipo_piso', relatorio.tipo_piso))
+  linha('Turnos', opcaoLabel('turnos', relatorio.turnos))
+  linha('Dias de operação', opcaoLabel('dias_semana', relatorio.dias_semana))
+
+  tituloSecao('Frota de empilhadeiras')
+  linha('Total de máquinas', opcaoLabel('qtd_maquinas_faixa', relatorio.qtd_maquinas_faixa))
+  linha('Elétricas / GLP / Diesel', `${relatorio.qtd_eletricas ?? 0} / ${relatorio.qtd_glp ?? 0} / ${relatorio.qtd_diesel ?? 0}`)
+  linha('Classes I-V', `${relatorio.qtd_classe_i ?? 0} / ${relatorio.qtd_classe_ii ?? 0} / ${relatorio.qtd_classe_iii ?? 0} / ${relatorio.qtd_classe_iv ?? 0} / ${relatorio.qtd_classe_v ?? 0}`)
+
+  tituloSecao('Manutenção e consumo')
+  linha('Manutenção interna', opcaoLabel('manutencao_interna', relatorio.manutencao_interna))
+  linha('Técnico interno', opcaoLabel('tecnico_interno', relatorio.tecnico_interno))
+  linha('Consumo de peças', opcaoLabel('consumo_pecas', relatorio.consumo_pecas))
+  linha('Consumo de pneus', opcaoLabel('consumo_pneus', relatorio.consumo_pneus))
+  linha('Consumo de rodas', opcaoLabel('consumo_rodas', relatorio.consumo_rodas))
+
+  tituloSecao('Projetos futuros')
+  linha('Existe projeto futuro?', opcaoLabel('projeto_futuro', relatorio.projeto_futuro))
+  linha('Tipo de projeto', relatorio.tipo_projeto === 'Outros' ? relatorio.tipo_projeto_outro : opcaoLabel('tipo_projeto', relatorio.tipo_projeto))
+  linha('Prazo', opcaoLabel('prazo_projeto', relatorio.prazo_projeto))
+
+  tituloSecao('Oportunidades identificadas')
+  linha('', (relatorio.oportunidades || []).length > 0
+    ? relatorio.oportunidades.map(k => OPORTUNIDADES_OPCOES.find(o => o.key === k)?.label || k).join(', ')
+    : 'Nenhuma')
+
+  tituloSecao('Aderência e potencial')
+  linha('Aderência', opcaoLabel('aderencia', relatorio.aderencia))
+  linha('Estimativa de custo mensal', opcaoLabel('custo_mensal_estimado', relatorio.custo_mensal_estimado))
+
+  tituloSecao('Comentários')
+  linha('', relatorio.comentarios || relatorio.descricao_geral || '-')
+
+  if (relatorio.fotos && relatorio.fotos.length > 0) {
+    doc.addPage()
+    y = 20
+    tituloSecao(`Fotos da visita (${relatorio.fotos.length})`)
+    let x = 14
+    const largura = 85
+    const altura = 60
+    let coluna = 0
+    for (const url of relatorio.fotos) {
+      try {
+        const base64 = await imagemParaBase64(url)
+        if (y + altura > 280) { doc.addPage(); y = 20; x = 14; coluna = 0 }
+        doc.addImage(base64, 'JPEG', x, y, largura, altura)
+        if (coluna === 0) {
+          x = 14 + largura + 6
+          coluna = 1
+        } else {
+          x = 14
+          coluna = 0
+          y += altura + 6
+        }
+      } catch (e) {
+        console.error('Não deu pra incluir uma foto no PDF:', e)
+      }
+    }
+  }
+
+  const nomeArquivo = `relatorio-visita-${(relatorio.empresa || 'cliente').replace(/[^a-zA-Z0-9]/g, '-')}.pdf`
+  doc.save(nomeArquivo)
 }
 
 function SelectPontuado({ def, valor, onChange }) {

@@ -7,6 +7,9 @@ import {
 } from './constants'
 import { TEMA } from './theme'
 
+// Coloque o arquivo transpotech-banner.png dentro da pasta public do projeto.
+const BANNER_TRANSPOTECH_URL = '/transpotech-banner.png'
+
 function campo(chave) { return CAMPOS_PCI.find(c => c.chave === chave) }
 
 function obterUrlFoto(foto) {
@@ -525,6 +528,8 @@ async function gerarPdfRelatorio(relatorio, opcaoLabel) {
   const dataVisita = relatorio.data_visita ? new Date(relatorio.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-'
   const cidadeUf = `${relatorio.cidade || '-'}${relatorio.estado ? ' / ' + relatorio.estado : ''}`
   const frotaInformada = [relatorio.qtd_eletricas, relatorio.qtd_glp, relatorio.qtd_diesel].reduce((s, n) => s + (Number(n) || 0), 0)
+  let bannerTranspotech = null
+  try { bannerTranspotech = await imagemParaBase64(BANNER_TRANSPOTECH_URL) } catch (e) { console.error('Banner TranspoTech não encontrado:', e) }
   let y = 0
 
   const texto = (valor, fallback = '-') => valor === null || valor === undefined || valor === '' ? fallback : String(valor)
@@ -610,64 +615,73 @@ async function gerarPdfRelatorio(relatorio, opcaoLabel) {
     y += altura
   }
 
-  // Página 1 - visão executiva
-  cabecalho('Relatório de visita comercial', `PCI | ${dataVisita}`)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(22)
-  doc.setTextColor(...COR.preto)
-  doc.text(texto(relatorio.empresa).toUpperCase(), 14, y + 4)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...COR.cinza)
-  doc.text(`${cidadeUf}  |  Consultor: ${texto(relatorio.consultor?.nome)}`, 14, y + 11)
-  y += 20
+  // Página 1 - layout executivo aprovado
+  if (bannerTranspotech) doc.addImage(bannerTranspotech, 'PNG', 4, 4, 202, 72, undefined, 'FAST')
+  else { doc.setFillColor(...COR.laranja); doc.rect(0, 0, 210, 72, 'F'); marca() }
 
-  doc.setFillColor(...COR.preto)
-  doc.roundedRect(14, y, 182, 36, 3, 3, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...COR.branco)
-  doc.text('POTENCIAL COMERCIAL IDENTIFICADO', 20, y + 9)
-  doc.setFontSize(25)
-  doc.setTextColor(...COR.laranja)
-  doc.text(`${relatorio.nota_pci ?? '-'} / 100`, 20, y + 25)
-  doc.setFontSize(14)
-  doc.setTextColor(...COR.branco)
-  doc.text(classif.label, 188, y + 23, { align: 'right' })
-  y += 43
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...COR.preto)
+  doc.text('RELATÓRIO EXECUTIVO DE VISITA', 14, 88)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11)
+  doc.text('DIAGNÓSTICO PCI', 14, 96)
 
-  card(14, y, 57, 27, 'Frota informada', frotaInformada > 0 ? `${frotaInformada} máquinas` : valorCampo('qtd_maquinas_faixa'))
-  card(76.5, y, 57, 27, 'Oportunidades', `${oportunidades.length} identificadas`, COR.laranja)
-  card(139, y, 57, 27, 'Custo mensal', valorCampo('custo_mensal_estimado'))
-  y += 36
+  const infos = [
+    ['CLIENTE', texto(relatorio.empresa).toUpperCase()], ['LOCALIZAÇÃO', cidadeUf],
+    ['DATA DA VISITA', dataVisita], ['CONSULTOR', texto(relatorio.consultor?.nome)],
+  ]
+  infos.forEach(([rotulo, valor], i) => {
+    const x = 14 + i * 46
+    if (i > 0) { doc.setDrawColor(...COR.linha); doc.line(x - 3, 102, x - 3, 118) }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...COR.cinza); doc.text(rotulo, x, 106)
+    doc.setFontSize(9); doc.setTextColor(...COR.preto); doc.text(doc.splitTextToSize(valor, 41).slice(0, 2), x, 113)
+  })
 
-  tituloSecao('Leitura executiva')
-  parLinha('Contato-chave', `${texto(relatorio.contato_nome)} - ${texto(relatorio.contato_cargo)} (${valorCampo('contato_perfil')})`)
-  parLinha('Operação', `${valorCampo('tipo_operacao')} | ${valorCampo('turnos')} | ${valorCampo('dias_semana')}`)
-  parLinha('Cenário técnico', `Manutenção interna: ${valorCampo('manutencao_interna')} | Técnico interno: ${valorCampo('tecnico_interno')}`)
-  parLinha('Projeto futuro', `${valorCampo('projeto_futuro')} | ${relatorio.tipo_projeto === 'Outros' ? texto(relatorio.tipo_projeto_outro) : valorCampo('tipo_projeto')} | ${valorCampo('prazo_projeto')}`)
-  parLinha('Aderência', valorCampo('aderencia'))
-  y += 4
+  doc.setFillColor(...COR.preto); doc.roundedRect(14, 124, 182, 34, 3, 3, 'F')
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(...COR.branco); doc.setFontSize(25)
+  doc.text(`${relatorio.nota_pci ?? '-'} / 100`, 28, 143)
+  doc.setFontSize(14); doc.setTextColor(...COR.laranja); doc.text(classif.label.toUpperCase(), 183, 143, { align: 'right' })
+  doc.setFillColor(55, 55, 55); doc.roundedRect(26, 149, 158, 4, 2, 2, 'F')
+  doc.setFillColor(...COR.laranja); doc.roundedRect(26, 149, 158 * Math.min((Number(relatorio.nota_pci) || 0) / 100, 1), 4, 2, 2, 'F')
 
-  tituloSecao('Oportunidades prioritárias', `${oportunidades.length} frente(s)`)
-  if (oportunidades.length) {
-    oportunidades.forEach((chave, i) => {
-      const label = OPORTUNIDADES_OPCOES.find(o => o.key === chave)?.label || chave
-      doc.setFillColor(...COR.claro)
-      doc.circle(18, y - 1, 3, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...COR.laranja)
-      doc.text(String(i + 1), 18, y, { align: 'center' })
-      doc.setTextColor(...COR.preto)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.text(label, 25, y)
-      y += 8
-    })
-  } else {
-    parLinha('Status', 'Nenhuma oportunidade registrada na visita.')
+  card(14, 164, 57, 28, 'Frota informada', frotaInformada > 0 ? `${frotaInformada} máquinas` : valorCampo('qtd_maquinas_faixa'))
+  card(76.5, 164, 57, 28, 'Oportunidades', `${oportunidades.length} identificadas`, COR.laranja)
+  card(139, 164, 57, 28, 'Potencial mensal', valorCampo('custo_mensal_estimado'))
+
+  function tituloColuna(titulo, x, largura) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...COR.preto); doc.text(titulo, x, 202)
+    doc.setDrawColor(...COR.laranja); doc.setLineWidth(0.5); doc.line(x, 206, x + largura, 206)
   }
+  tituloColuna('LEITURA EXECUTIVA', 14, 88)
+  tituloColuna('PRIORIDADES COMERCIAIS', 108, 88)
+
+  const leituras = [
+    ['CONTATO-CHAVE', `${texto(relatorio.contato_nome)} - ${texto(relatorio.contato_cargo)} (${valorCampo('contato_perfil')})`],
+    ['OPERAÇÃO', `${valorCampo('tipo_operacao')} | ${valorCampo('turnos')} | ${valorCampo('dias_semana')}`],
+    ['CENÁRIO TÉCNICO', `Manutenção interna: ${valorCampo('manutencao_interna')} | Técnico: ${valorCampo('tecnico_interno')}`],
+    ['PROJETO FUTURO', `${relatorio.tipo_projeto === 'Outros' ? texto(relatorio.tipo_projeto_outro) : valorCampo('tipo_projeto')} | ${valorCampo('prazo_projeto')}`],
+    ['ADERÊNCIA', valorCampo('aderencia')],
+  ]
+  leituras.forEach(([rotulo, valor], i) => {
+    const topo = 214 + i * 10
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.3); doc.setTextColor(...COR.cinza); doc.text(rotulo, 14, topo)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.7); doc.setTextColor(...COR.preto)
+    doc.text(doc.splitTextToSize(valor, 55).slice(0, 2), 43, topo)
+    doc.setDrawColor(...COR.linha); doc.line(14, topo + 5, 102, topo + 5)
+  })
+
+  oportunidades.slice(0, 3).forEach((chave, i) => {
+    const label = OPORTUNIDADES_OPCOES.find(o => o.key === chave)?.label || chave
+    const topo = 216 + i * 17
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...COR.laranja); doc.text(`0${i + 1}`, 112, topo)
+    doc.setFontSize(7.5); doc.setTextColor(...COR.preto); doc.text(doc.splitTextToSize(label.toUpperCase(), 55).slice(0, 2), 132, topo - 1)
+    doc.setDrawColor(...COR.linha); doc.line(108, topo + 7, 196, topo + 7)
+  })
+
+  const proximoPasso = oportunidades.length
+    ? `Agendar diagnóstico técnico para ${OPORTUNIDADES_OPCOES.find(o => o.key === oportunidades[0])?.label?.toLowerCase() || 'a oportunidade prioritária'}`
+    : 'Definir próximo contato comercial com o cliente'
+  doc.setFillColor(255, 249, 242); doc.setDrawColor(...COR.laranja); doc.roundedRect(14, 266, 182, 17, 2, 2, 'FD')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...COR.laranja); doc.text('PRÓXIMO PASSO RECOMENDADO', 20, 272)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...COR.preto); doc.text(doc.splitTextToSize(proximoPasso, 158)[0], 20, 278)
 
   // Página 2 - diagnóstico e pontuação
   doc.addPage()

@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import {
   listarContratosManutencao, importarContratosManutencao, criarContratoManutencao,
   atualizarContratoManutencao, registrarContatoContrato, excluirContratoManutencao, buscarUltimosContatosPipeline,
-  marcarContratoFaturado,
+  marcarContratoFaturado, listarConsultores,
 } from './api'
 import { formatarMoeda } from './constants'
 import { TEMA } from './theme'
@@ -16,6 +16,8 @@ export default function PM2P({ euMesmo }) {
   const [contatosPipeline, setContatosPipeline] = useState({})
   const [carregando, setCarregando] = useState(true)
   const [busca, setBusca] = useState('')
+  const [ordenacao, setOrdenacao] = useState('az')
+  const [filtroFaturado, setFiltroFaturado] = useState('todos')
   const [modalNovoAberto, setModalNovoAberto] = useState(false)
   const [contratoSelecionado, setContratoSelecionado] = useState(null)
   const [importando, setImportando] = useState(false)
@@ -172,7 +174,14 @@ export default function PM2P({ euMesmo }) {
     return { label: 'Em dia', cor: TEMA.verde }
   }
 
-  const filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
+  let filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
+  if (filtroFaturado === 'faturado') filtrados = filtrados.filter(c => c.faturado)
+  if (filtroFaturado === 'nao_faturado') filtrados = filtrados.filter(c => !c.faturado)
+  filtrados = [...filtrados].sort((a, b) => {
+    if (ordenacao === 'az') return a.cliente_nome.localeCompare(b.cliente_nome)
+    if (ordenacao === 'rentabilidade') return (b.rentabilidade_percentual || 0) - (a.rentabilidade_percentual || 0)
+    return 0
+  })
   const ativos = contratos.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
   const totalFaturadoPm2p = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
@@ -222,12 +231,23 @@ export default function PM2P({ euMesmo }) {
         </div>
       )}
 
-      <input
-        placeholder="Buscar por cliente..."
-        value={busca}
-        onChange={e => setBusca(e.target.value)}
-        style={{ ...inputStyle, width: 260, marginBottom: 12 }}
-      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <input
+          placeholder="Buscar por cliente..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          style={{ ...inputStyle, width: 240 }}
+        />
+        <select value={ordenacao} onChange={e => setOrdenacao(e.target.value)} style={inputStyle}>
+          <option value="az">Ordenar: A a Z</option>
+          <option value="rentabilidade">Ordenar: Rentabilidade (maior p/ menor)</option>
+        </select>
+        <select value={filtroFaturado} onChange={e => setFiltroFaturado(e.target.value)} style={inputStyle}>
+          <option value="todos">Todos os contratos</option>
+          <option value="faturado">Só já faturados</option>
+          <option value="nao_faturado">Só não faturados</option>
+        </select>
+      </div>
 
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -426,7 +446,8 @@ function MeusContratosPm2p({ euMesmo }) {
 function ModalContrato({ contrato, onFechar, onSalvo }) {
   const [clienteNome, setClienteNome] = useState(contrato?.cliente_nome || '')
   const [modelo, setModelo] = useState(contrato?.modelo || '')
-  const [analista, setAnalista] = useState(contrato?.analista || '')
+  const [analistaConsultorId, setAnalistaConsultorId] = useState(contrato?.analista_consultor_id || '')
+  const [consultores, setConsultores] = useState([])
   const [valorMensalidade, setValorMensalidade] = useState(contrato?.valor_mensalidade ?? '')
   const [rentabilidadeValor, setRentabilidadeValor] = useState(contrato?.rentabilidade_valor ?? '')
   const rentabilidadeCalculada = valorMensalidade > 0 && rentabilidadeValor !== ''
@@ -437,6 +458,8 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
   const [salvando, setSalvando] = useState(false)
 
+  useEffect(() => { listarConsultores().then(setConsultores) }, [])
+
   async function salvar(e) {
     e.preventDefault()
     setSalvando(true)
@@ -444,7 +467,8 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
       const dados = {
         cliente_nome: clienteNome,
         modelo: modelo || null,
-        analista: analista || null,
+        analista: analistaConsultorId ? consultores.find(c => c.id === analistaConsultorId)?.nome || null : null,
+        analista_consultor_id: analistaConsultorId || null,
         valor_mensalidade: valorMensalidade ? Number(valorMensalidade) : 0,
         rentabilidade_percentual: rentabilidadeCalculada,
         rentabilidade_valor: rentabilidadeValor !== '' ? Number(rentabilidadeValor) : null,
@@ -487,7 +511,12 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         <Campo label="Cliente"><input required value={clienteNome} onChange={e => setClienteNome(e.target.value)} style={inputStyleModal} /></Campo>
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Modelo" style={{ flex: 1 }}><input value={modelo} onChange={e => setModelo(e.target.value)} style={inputStyleModal} /></Campo>
-          <Campo label="Analista responsável" style={{ flex: 1 }}><input value={analista} onChange={e => setAnalista(e.target.value)} style={inputStyleModal} /></Campo>
+          <Campo label="Analista responsável" style={{ flex: 1 }}>
+            <select value={analistaConsultorId} onChange={e => setAnalistaConsultorId(e.target.value)} style={inputStyleModal}>
+              <option value="">-</option>
+              {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </Campo>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Valor mensalidade (R$)" style={{ flex: 1 }}><input type="number" step="0.01" value={valorMensalidade} onChange={e => setValorMensalidade(e.target.value)} style={inputStyleModal} /></Campo>

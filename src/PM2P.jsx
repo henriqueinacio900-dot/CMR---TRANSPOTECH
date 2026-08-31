@@ -239,13 +239,13 @@ export default function PM2P({ euMesmo }) {
           style={{ ...inputStyle, width: 240 }}
         />
         <select value={ordenacao} onChange={e => setOrdenacao(e.target.value)} style={inputStyle}>
-          <option value="az">Ordenar: A a Z</option>
-          <option value="rentabilidade">Ordenar: Rentabilidade (maior p/ menor)</option>
+          <option value="az" style={{ color: '#222' }}>Ordenar: A a Z</option>
+          <option value="rentabilidade" style={{ color: '#222' }}>Ordenar: Rentabilidade (maior p/ menor)</option>
         </select>
         <select value={filtroFaturado} onChange={e => setFiltroFaturado(e.target.value)} style={inputStyle}>
-          <option value="todos">Todos os contratos</option>
-          <option value="faturado">Só já faturados</option>
-          <option value="nao_faturado">Só não faturados</option>
+          <option value="todos" style={{ color: '#222' }}>Todos os contratos</option>
+          <option value="faturado" style={{ color: '#222' }}>Só já faturados</option>
+          <option value="nao_faturado" style={{ color: '#222' }}>Só não faturados</option>
         </select>
       </div>
 
@@ -384,6 +384,7 @@ function Top5Rentaveis({ contratos }) {
 function MeusContratosPm2p({ euMesmo }) {
   const [contratos, setContratos] = useState([])
   const [carregando, setCarregando] = useState(true)
+  const [contratoSelecionado, setContratoSelecionado] = useState(null)
 
   async function carregar() {
     setCarregando(true)
@@ -413,18 +414,18 @@ function MeusContratosPm2p({ euMesmo }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {ativos.map(c => (
-          <label
+          <div
             key={c.id}
             style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-              background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 14, cursor: 'pointer',
+              background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 14,
             }}
           >
-            <div>
+            <div onClick={() => setContratoSelecionado(c)} style={{ cursor: 'pointer', flex: 1 }}>
               <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{c.cliente_nome}</p>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: TEMA.textoSecundario }}>{formatarMoeda(c.valor_mensalidade)} / mês</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: TEMA.textoSecundario }}>{formatarMoeda(c.valor_mensalidade)} / mês · toque pra editar</p>
             </div>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <span style={{ fontSize: 12, color: c.faturado ? TEMA.verde : TEMA.textoSecundario, fontWeight: 600 }}>
                 {c.faturado ? 'Faturado ✓' : 'Marcar como faturado'}
               </span>
@@ -434,16 +435,25 @@ function MeusContratosPm2p({ euMesmo }) {
                 onChange={async e => { await marcarContratoFaturado(c.id, e.target.checked); carregar() }}
                 style={{ width: 20, height: 20, cursor: 'pointer' }}
               />
-            </span>
-          </label>
+            </label>
+          </div>
         ))}
         {ativos.length === 0 && <p style={{ color: TEMA.textoDiscreto, fontSize: 13 }}>Nenhum contrato PM2P atribuído a você ainda.</p>}
       </div>
+
+      {contratoSelecionado && (
+        <ModalContrato
+          contrato={contratoSelecionado}
+          ehAdmin={false}
+          onFechar={() => setContratoSelecionado(null)}
+          onSalvo={() => { setContratoSelecionado(null); carregar() }}
+        />
+      )}
     </div>
   )
 }
 
-function ModalContrato({ contrato, onFechar, onSalvo }) {
+function ModalContrato({ contrato, onFechar, onSalvo, ehAdmin = true }) {
   const [clienteNome, setClienteNome] = useState(contrato?.cliente_nome || '')
   const [modelo, setModelo] = useState(contrato?.modelo || '')
   const [analistaConsultorId, setAnalistaConsultorId] = useState(contrato?.analista_consultor_id || '')
@@ -512,10 +522,16 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <Campo label="Modelo" style={{ flex: 1 }}><input value={modelo} onChange={e => setModelo(e.target.value)} style={inputStyleModal} /></Campo>
           <Campo label="Analista responsável" style={{ flex: 1 }}>
-            <select value={analistaConsultorId} onChange={e => setAnalistaConsultorId(e.target.value)} style={inputStyleModal}>
-              <option value="">-</option>
-              {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+            {ehAdmin ? (
+              <select value={analistaConsultorId} onChange={e => setAnalistaConsultorId(e.target.value)} style={inputStyleModal}>
+                <option value="">-</option>
+                {consultores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            ) : (
+              <div style={{ ...inputStyleModal, background: '#f2f2f2', color: '#555', display: 'flex', alignItems: 'center' }}>
+                {contrato?.analista_consultor?.nome || contrato?.analista || '-'}
+              </div>
+            )}
           </Campo>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -553,7 +569,7 @@ function ModalContrato({ contrato, onFechar, onSalvo }) {
           <button type="submit" disabled={salvando} style={{ ...botaoModal, background: '#F77E01', color: '#fff' }}>
             {salvando ? 'Salvando...' : 'Salvar'}
           </button>
-          {contrato && (
+          {contrato && ehAdmin && (
             <button type="button" onClick={excluir} disabled={salvando} style={{ ...botaoModal, background: 'none', color: '#a32d2d', border: '1px solid #eee' }}>
               Excluir
             </button>

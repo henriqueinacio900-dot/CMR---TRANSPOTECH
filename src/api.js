@@ -680,13 +680,72 @@ export async function buscarUltimosContatosPipeline() {
 }
 
 // ---------- Relatório de visita ----------
+const BUCKET_FOTOS_RELATORIO = 'relatorio-fotos'
+
+function listaFotos(valor) {
+  if (!valor) return []
+  if (Array.isArray(valor)) return valor
+  if (typeof valor === 'string') {
+    try {
+      const convertido = JSON.parse(valor)
+      return Array.isArray(convertido) ? convertido : [convertido]
+    } catch {
+      return [valor]
+    }
+  }
+  return [valor]
+}
+
+function caminhoFotoNoBucket(foto) {
+  const valor = typeof foto === 'string'
+    ? foto
+    : foto?.path || foto?.url || foto?.publicUrl || foto?.signedUrl || ''
+  if (!valor) return null
+
+  // Fotos novas podem ser armazenadas somente pelo caminho.
+  if (!/^https?:\/\//i.test(valor)) return valor.replace(/^\/+/, '')
+
+  // Recupera o caminho de URLs públicas ou assinadas já salvas no banco.
+  const marcador = `/${BUCKET_FOTOS_RELATORIO}/`
+  const indice = valor.indexOf(marcador)
+  if (indice === -1) return null
+  return decodeURIComponent(valor.slice(indice + marcador.length).split('?')[0])
+}
+
+async function carregarUrlsFotos(fotos) {
+  const originais = listaFotos(fotos)
+  if (originais.length === 0) return []
+
+  return Promise.all(originais.map(async foto => {
+    const caminho = caminhoFotoNoBucket(foto)
+    if (!caminho) return typeof foto === 'string' ? foto : (foto?.url || foto?.publicUrl || foto?.signedUrl || '')
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET_FOTOS_RELATORIO)
+      .createSignedUrl(caminho, 60 * 60 * 24 * 7)
+
+    if (error) {
+      console.error('Erro ao criar URL da foto do relatório:', error)
+      return ''
+    }
+    return data.signedUrl
+  })).then(urls => urls.filter(Boolean))
+}
+
+async function carregarFotosDosRelatorios(relatorios) {
+  return Promise.all((relatorios || []).map(async relatorio => ({
+    ...relatorio,
+    fotos: await carregarUrlsFotos(relatorio.fotos),
+  })))
+}
+
 export async function listarRelatoriosVisita() {
   const { data, error } = await supabase
     .from('relatorios_visita')
     .select('*, negocio:negocios(id, cliente:clientes(razao_social)), consultor:consultores(nome)')
     .order('data_visita', { ascending: false })
   if (error) { console.error('Erro ao listar relatórios de visita:', error); return [] }
-  return data
+  return carregarFotosDosRelatorios(data)
 }
 
 export async function buscarRelatorioPorAtividade(atividadeId) {
@@ -696,7 +755,8 @@ export async function buscarRelatorioPorAtividade(atividadeId) {
     .eq('atividade_id', atividadeId)
     .maybeSingle()
   if (error) { console.error(error); return null }
-  return data
+  if (!data) return null
+  return { ...data, fotos: await carregarUrlsFotos(data.fotos) }
 }
 
 export async function salvarRelatorioVisita(dados, id) {
@@ -746,10 +806,17 @@ async function atualizarPciDoClientePorNegocio(negocioId, nota, classificacao) {
 
 export async function uploadFotoRelatorio(arquivo) {
   const nomeArquivo = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '')}`
-  const { error } = await supabase.storage.from('relatorio-fotos').upload(nomeArquivo, arquivo)
+  const { error } = await supabase.storage.from(BUCKET_FOTOS_RELATORIO).upload(nomeArquivo, arquivo, {
+    cacheControl: '3600',
+    contentType: arquivo.type || undefined,
+    upsert: false,
+  })
   if (error) throw error
-  const { data } = supabase.storage.from('relatorio-fotos').getPublicUrl(nomeArquivo)
-  return data.publicUrl
+  const { data, error: erroUrl } = await supabase.storage
+    .from(BUCKET_FOTOS_RELATORIO)
+    .createSignedUrl(nomeArquivo, 60 * 60 * 24 * 7)
+  if (erroUrl) throw erroUrl
+  return data.signedUrl
 }
 
 // ---------- Visitas programadas (uso mobile) ----------

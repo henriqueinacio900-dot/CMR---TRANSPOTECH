@@ -9,6 +9,22 @@ import { TEMA } from './theme'
 
 function campo(chave) { return CAMPOS_PCI.find(c => c.chave === chave) }
 
+function obterUrlFoto(foto) {
+  if (!foto) return ''
+  if (typeof foto === 'string') return foto
+  return foto.publicUrl || foto.publicURL || foto.url || foto.signedUrl || foto.path || ''
+}
+
+function normalizarFotos(fotos) {
+  if (!fotos) return []
+  let lista = fotos
+  if (typeof lista === 'string') {
+    try { lista = JSON.parse(lista) } catch { lista = [lista] }
+  }
+  if (!Array.isArray(lista)) lista = [lista]
+  return lista.map(obterUrlFoto).filter(Boolean)
+}
+
 export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, onAbrirNegocio }) {
   const [modo, setModo] = useState('lista') // lista | form | ver
   const [relatorios, setRelatorios] = useState([])
@@ -65,6 +81,7 @@ export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {relatorios.map(r => {
           const classif = classificarPciNovo(r.nota_pci)
+          const opcaoLabel = (chave, valor) => campo(chave)?.opcoes.find(o => o.key === valor)?.label || valor || '-'
           return (
             <div
               key={r.id}
@@ -79,12 +96,26 @@ export default function RelatorioVisita({ abrirParaAtividade, aoFecharAbertura, 
                   {r.cidade} · {r.consultor?.nome} · {r.data_visita ? new Date(r.data_visita + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                 </p>
               </div>
-              <span style={{
-                fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0,
-                background: classif.cor + '22', color: classif.cor, border: `1px solid ${classif.cor}55`,
-              }}>
-                {r.nota_pci ?? '—'} / 100
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 20,
+                  background: classif.cor + '22', color: classif.cor, border: `1px solid ${classif.cor}55`,
+                }}>
+                  {r.nota_pci ?? '—'} / 100
+                </span>
+                <button
+                  type="button"
+                  title="Gerar PDF deste relatório"
+                  onClick={async e => {
+                    e.stopPropagation()
+                    try { await gerarPdfRelatorio(r, opcaoLabel) }
+                    catch (erro) { alert('Não deu pra gerar o PDF: ' + (erro.message || 'erro desconhecido')) }
+                  }}
+                  style={{ background: '#F77E01', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ⬇ Gerar PDF
+                </button>
+              </div>
             </div>
           )
         })}
@@ -116,7 +147,7 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
     comentarios: relatorio.comentarios || relatorio.descricao_geral || '',
   })
   const [oportunidades, setOportunidades] = useState(relatorio.oportunidades || [])
-  const [fotos, setFotos] = useState(relatorio.fotos || [])
+  const [fotos, setFotos] = useState(() => normalizarFotos(relatorio.fotos))
   const [enviandoFoto, setEnviandoFoto] = useState(false)
   const [erroFoto, setErroFoto] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -144,7 +175,12 @@ export function FormularioRelatorio({ relatorio, onSalvo, onCancelar }) {
     setEnviandoFoto(true)
     try {
       const urls = []
-      for (const arquivo of arquivos) urls.push(await uploadFotoRelatorio(arquivo))
+      for (const arquivo of arquivos) {
+        const resultado = await uploadFotoRelatorio(arquivo)
+        const url = obterUrlFoto(resultado)
+        if (!url) throw new Error('o upload terminou, mas não retornou a URL da imagem')
+        urls.push(url)
+      }
       setFotos(f => [...f, ...urls])
     } catch (err) {
       setErroFoto('Não deu pra enviar a foto: ' + (err.message || 'erro desconhecido'))
@@ -363,6 +399,7 @@ function VisualizarRelatorio({ relatorio, onFechar }) {
   const classif = classificarPciNovo(relatorio.nota_pci)
   const opcaoLabel = (chave, valor) => campo(chave)?.opcoes.find(o => o.key === valor)?.label || valor || '-'
   const [gerandoPdf, setGerandoPdf] = useState(false)
+  const fotos = normalizarFotos(relatorio.fotos)
 
   async function gerarPdf() {
     setGerandoPdf(true)
@@ -450,13 +487,13 @@ function VisualizarRelatorio({ relatorio, onFechar }) {
 
       <Bloco titulo="Comentários" itens={[[null, relatorio.comentarios || relatorio.descricao_geral || '-']]} />
 
-      {relatorio.fotos && relatorio.fotos.length > 0 && (
+      {fotos.length > 0 && (
         <div style={{ background: TEMA.card, border: `1px solid ${TEMA.borda}`, borderRadius: 10, padding: 14, marginBottom: 12 }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: TEMA.laranjaLuminoso, textTransform: 'uppercase', margin: '0 0 8px' }}>
-            Fotos da visita ({relatorio.fotos.length})
+            Fotos da visita ({fotos.length})
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
-            {relatorio.fotos.map(url => (
+            {fotos.map(url => (
               <a key={url} href={url} target="_blank" rel="noopener noreferrer">
                 <img src={url} alt="Foto da visita" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 6 }} />
               </a>
@@ -469,7 +506,8 @@ function VisualizarRelatorio({ relatorio, onFechar }) {
 }
 
 async function imagemParaBase64(url) {
-  const resp = await fetch(url)
+  const resp = await fetch(url, { mode: 'cors' })
+  if (!resp.ok) throw new Error(`Falha ao baixar imagem (${resp.status})`)
   const blob = await resp.blob()
   return new Promise((resolve, reject) => {
     const leitor = new FileReader()
@@ -573,19 +611,20 @@ async function gerarPdfRelatorio(relatorio, opcaoLabel) {
   tituloSecao('Comentários')
   linha('', relatorio.comentarios || relatorio.descricao_geral || '-')
 
-  if (relatorio.fotos && relatorio.fotos.length > 0) {
+  const fotos = normalizarFotos(relatorio.fotos)
+  if (fotos.length > 0) {
     doc.addPage()
     y = 20
-    tituloSecao(`Fotos da visita (${relatorio.fotos.length})`)
+    tituloSecao(`Fotos da visita (${fotos.length})`)
     let x = 14
     const largura = 85
     const altura = 60
     let coluna = 0
-    for (const url of relatorio.fotos) {
+    for (const url of fotos) {
       try {
         const base64 = await imagemParaBase64(url)
         if (y + altura > 280) { doc.addPage(); y = 20; x = 14; coluna = 0 }
-        doc.addImage(base64, 'JPEG', x, y, largura, altura)
+        doc.addImage(base64, undefined, x, y, largura, altura, undefined, 'FAST')
         if (coluna === 0) {
           x = 14 + largura + 6
           coluna = 1

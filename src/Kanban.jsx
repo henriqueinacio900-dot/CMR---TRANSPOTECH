@@ -44,6 +44,15 @@ const ESTILOS_GLOBAIS = `
   .tp-input:focus { outline: none; border-color: rgba(255,137,0,0.5) !important; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 8px; }
+  .tp-scroll-topo::-webkit-scrollbar { height: 10px; }
+  .tp-scroll-topo::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 10px; }
+  .tp-scroll-topo::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #FF7900, #FF8A00);
+    border-radius: 10px;
+    box-shadow: 0 0 8px #FF7900, 0 0 2px #FF8A00;
+  }
+  .tp-scroll-topo::-webkit-scrollbar-thumb:hover { box-shadow: 0 0 12px #FF8A00, 0 0 4px #FF7900; }
+  .tp-scroll-topo { scrollbar-color: #FF7900 rgba(255,255,255,0.06); scrollbar-width: thin; }
   .tp-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
   .tp-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
   @media (max-width: 980px) {
@@ -941,7 +950,8 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+      <div className="tp-scroll-topo" style={{ overflowX: 'auto', transform: 'scaleY(-1)' }}>
+      <div style={{ display: 'flex', gap: 10, paddingBottom: 8, transform: 'scaleY(-1)' }}>
         {etapas.map(col => {
           let itens = filtrados.filter(n => n.etapa === col.key)
           if (col.key === 'ganha') itens = itens.filter(n => dentroDoPeriodo(n.atualizado_em))
@@ -967,6 +977,7 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
             </div>
           )
         })}
+      </div>
       </div>
       <ListaRetorno negocios={filtrados} onAtualizado={onAtualizado} />
       <ConversaoEtapas filtrados={filtrados} />

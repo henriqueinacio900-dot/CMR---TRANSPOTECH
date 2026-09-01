@@ -247,6 +247,7 @@ export default function Kanban() {
             setVendedorSelecionado={setVendedorSelecionado}
             onAbrir={id => setNegocioSelecionado(id)}
             onAtualizado={carregar}
+            periodo={periodo}
           />
         )}
 
@@ -801,7 +802,7 @@ function VisaoGeral(props) {
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <QuadroKanban filtrados={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} colunasVisiveis={7} />
+          <QuadroKanban filtrados={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} colunasVisiveis={7} periodo={periodo} />
         </div>
         <div style={{ width: 300, flexShrink: 0 }}>
           <FilaLigar negocios={filtrados} onAbrir={onAbrir} onAtualizado={onAtualizado} />
@@ -841,7 +842,7 @@ function PipelineBoard(props) {
           </span>
         )}
       </div>
-      <QuadroKanban filtrados={filtradosPorOrcamento} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} />
+      <QuadroKanban filtrados={filtradosPorOrcamento} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} periodo={props.periodo} />
     </div>
   )
 }
@@ -927,22 +928,33 @@ function FiltrosLinha({ departamentos, consultores, deptSelecionado, setDeptSele
   )
 }
 
-function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis }) {
+function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, periodo }) {
   const etapas = colunasVisiveis === 5
     ? ETAPAS.filter(e => e.key !== 'ganha' && e.key !== 'perdida')
     : ETAPAS
+
+  function dentroDoPeriodo(data) {
+    if (!periodo || !data) return true
+    const d = new Date(data)
+    return d >= periodo.inicio && d <= periodo.fim
+  }
 
   return (
     <>
       <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
         {etapas.map(col => {
-          const itens = filtrados.filter(n => n.etapa === col.key)
+          let itens = filtrados.filter(n => n.etapa === col.key)
+          if (col.key === 'ganha') itens = itens.filter(n => dentroDoPeriodo(n.atualizado_em))
+          if (col.key === 'perdida') itens = itens.filter(n => dentroDoPeriodo(n.data_perda))
           const totalCol = itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
           return (
             <div key={col.key} style={{ minWidth: 200, flex: '1 0 200px' }}>
               <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #eee', borderRadius: 8, marginBottom: 8 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{col.label}</p>
                 <p style={{ fontSize: 12, color: '#666', margin: '2px 0 0' }}>{itens.length} negócios · {formatarMoeda(totalCol)}</p>
+                {(col.key === 'ganha' || col.key === 'perdida') && (
+                  <p style={{ fontSize: 10, color: '#999', margin: '2px 0 0' }}>Do período selecionado</p>
+                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {itens.map(n => {

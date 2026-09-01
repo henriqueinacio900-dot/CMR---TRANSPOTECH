@@ -107,7 +107,7 @@ export async function atualizarNegocio(negocioId, dados) {
 export async function moverEtapa(negocioId, novaEtapa, extra = {}) {
   const { data, error } = await supabase
     .from('negocios')
-    .update({ etapa: novaEtapa, ...extra })
+    .update({ etapa: novaEtapa, atualizado_em: new Date().toISOString(), ...extra })
     .eq('id', negocioId)
     .select()
     .single()

@@ -765,8 +765,11 @@ function GraficoCrescimentoDiario({ filtradosPeriodo, periodo }) {
 function VisaoGeral(props) {
   const { filtrados, metrics, onAbrir, onAtualizado, periodo, periodoChave, setPeriodoChave, periodoPersonalizado, setPeriodoPersonalizado, departamentos, consultores, metas, euMesmo } = props
   const filtradosPeriodo = filtrados.filter(n => {
-    if (!n.criado_em) return false
-    const d = new Date(n.criado_em)
+    // Ganha/Perdida: o que manda é a data de fechamento (atualizado_em), não a de criação.
+    // Etapas abertas: continua usando a data de criação (1º contato).
+    const dataReferencia = (n.etapa === 'ganha' || n.etapa === 'perdida') ? n.atualizado_em : n.criado_em
+    if (!dataReferencia) return false
+    const d = new Date(dataReferencia)
     return d >= periodo.inicio && d <= periodo.fim
   })
   const followupsHoje = filtrados.filter(n => {
@@ -802,7 +805,7 @@ function VisaoGeral(props) {
         <TopVendedores filtrados={filtradosPeriodo} />
       </div>
       <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: '-14px 0 20px' }}>
-        Funil, temperatura e ranking acima consideram a Data 1º contato dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
+        Ganha/Perdida acima consideram a data de fechamento; as demais etapas consideram a Data 1º contato — tudo dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
       </p>
 
       <GraficoCrescimentoDiario filtradosPeriodo={filtrados} periodo={periodo} />

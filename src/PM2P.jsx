@@ -194,7 +194,7 @@ export default function PM2P({ euMesmo }) {
     }
   })
   consultoresComContrato.sort((a, b) => a.nome.localeCompare(b.nome))
-  const ativos = contratos.filter(c => c.status === 'ativo')
+  const ativos = filtrados.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
   const totalFaturadoPm2p = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
   const percentualFaturadoPm2p = totalMensalidade > 0 ? (totalFaturadoPm2p / totalMensalidade) * 100 : 0

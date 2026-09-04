@@ -18,6 +18,7 @@ export default function PM2P({ euMesmo }) {
   const [busca, setBusca] = useState('')
   const [ordenacao, setOrdenacao] = useState('az')
   const [filtroFaturado, setFiltroFaturado] = useState('todos')
+  const [filtroConsultor, setFiltroConsultor] = useState('todos')
   const [modalNovoAberto, setModalNovoAberto] = useState(false)
   const [contratoSelecionado, setContratoSelecionado] = useState(null)
   const [importando, setImportando] = useState(false)
@@ -177,11 +178,22 @@ export default function PM2P({ euMesmo }) {
   let filtrados = contratos.filter(c => !busca || c.cliente_nome.toLowerCase().includes(busca.toLowerCase()))
   if (filtroFaturado === 'faturado') filtrados = filtrados.filter(c => c.faturado)
   if (filtroFaturado === 'nao_faturado') filtrados = filtrados.filter(c => !c.faturado)
+  if (filtroConsultor !== 'todos') filtrados = filtrados.filter(c => c.analista_consultor_id === filtroConsultor)
   filtrados = [...filtrados].sort((a, b) => {
     if (ordenacao === 'az') return a.cliente_nome.localeCompare(b.cliente_nome)
     if (ordenacao === 'rentabilidade') return (b.rentabilidade_percentual || 0) - (a.rentabilidade_percentual || 0)
     return 0
   })
+
+  const consultoresComContrato = []
+  const idsVistos = new Set()
+  contratos.forEach(c => {
+    if (c.analista_consultor_id && c.analista_consultor?.nome && !idsVistos.has(c.analista_consultor_id)) {
+      idsVistos.add(c.analista_consultor_id)
+      consultoresComContrato.push({ id: c.analista_consultor_id, nome: c.analista_consultor.nome })
+    }
+  })
+  consultoresComContrato.sort((a, b) => a.nome.localeCompare(b.nome))
   const ativos = contratos.filter(c => c.status === 'ativo')
   const totalMensalidade = ativos.reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
   const totalFaturadoPm2p = ativos.filter(c => c.faturado).reduce((s, c) => s + (c.valor_mensalidade || 0), 0)
@@ -246,6 +258,10 @@ export default function PM2P({ euMesmo }) {
           <option value="todos" style={{ color: '#222' }}>Todos os contratos</option>
           <option value="faturado" style={{ color: '#222' }}>Só já faturados</option>
           <option value="nao_faturado" style={{ color: '#222' }}>Só não faturados</option>
+        </select>
+        <select value={filtroConsultor} onChange={e => setFiltroConsultor(e.target.value)} style={inputStyle}>
+          <option value="todos" style={{ color: '#222' }}>Todos os consultores</option>
+          {consultoresComContrato.map(c => <option key={c.id} value={c.id} style={{ color: '#222' }}>{c.nome}</option>)}
         </select>
       </div>
 

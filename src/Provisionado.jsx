@@ -13,6 +13,10 @@ export default function Provisionado() {
   const [carregando, setCarregando] = useState(true)
 
   const agora = new Date()
+  const primeiroDiaMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString().slice(0, 10)
+  const hojeStr = agora.toISOString().slice(0, 10)
+  const [dataInicio, setDataInicio] = useState(primeiroDiaMes)
+  const [dataFim, setDataFim] = useState(hojeStr)
 
   useEffect(() => {
     Promise.all([
@@ -37,8 +41,13 @@ export default function Provisionado() {
     ? metas
     : metas.filter(m => m.consultor_id === vendedorSelecionado)
 
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const ganhosMes = negociosFiltrados.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
+  const inicioPeriodo = new Date(dataInicio + 'T00:00:00')
+  const fimPeriodo = new Date(dataFim + 'T23:59:59')
+  const ganhosMes = negociosFiltrados.filter(n => {
+    if (n.etapa !== 'ganha' || !n.atualizado_em) return false
+    const d = new Date(n.atualizado_em)
+    return d >= inicioPeriodo && d <= fimPeriodo
+  })
 
   const faturados = ganhosMes.filter(n => n.status_faturamento === 'faturado')
   const previstos = ganhosMes.filter(n => n.status_faturamento !== 'faturado')
@@ -61,7 +70,7 @@ export default function Provisionado() {
     linhas.push(['META', meta])
     linhas.push(['FATURADO', totalFaturado])
     linhas.push([])
-    linhas.push(['Faturado no mês (detalhado)'])
+    linhas.push(['Faturado no período (detalhado)'])
     faturados.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
     linhas.push([])
     linhas.push(['Aprovado próximo mês'])
@@ -83,15 +92,20 @@ export default function Provisionado() {
     ws['!cols'] = [{ wch: 32 }, { wch: 16 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Provisionado')
-    const dataStr = agora.toLocaleDateString('pt-BR').replace(/\//g, '-')
+    const dataStr = `${dataInicio}_a_${dataFim}`
     XLSX.writeFile(wb, `provisionado-${dataStr}.xlsx`)
   }
 
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Provisionado — {agora.toLocaleDateString('pt-BR')}</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <p style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+          Provisionado — {new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR')} até {new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={selectVendedor} />
+          <span style={{ fontSize: 12, color: '#999' }}>até</span>
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={selectVendedor} />
           {ehAdmin && (
             <select value={vendedorSelecionado} onChange={e => setVendedorSelecionado(e.target.value)} style={selectVendedor}>
               <option value="todos">Todos os vendedores</option>
@@ -113,7 +127,7 @@ export default function Provisionado() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 16 }}>
         <Tabela
-          titulo="Faturado no mês"
+          titulo="Faturado no período"
           itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
           total={totalFaturado}
           totalLabel="Total faturado"
@@ -139,7 +153,7 @@ export default function Provisionado() {
       </div>
 
       <p style={{ fontSize: 11, color: '#999', marginTop: 16 }}>
-        Negociação é só informativo aqui — não entra na conta do saldo pra meta. "Aprovado próximo mês" mostra os negócios que estão na etapa "Faturamento próximo mês" do pipeline — mova o card pra Ganha quando puder faturar de verdade.
+        Negociação é só informativo aqui — não entra na conta do saldo pra meta. "Aprovado próximo mês" mostra os negócios que estão na etapa "Faturamento próximo mês" do pipeline — mova o card pra Ganha quando puder faturar de verdade. A Meta exibida é sempre a do mês corrente, mesmo se você escolher um período diferente acima.
       </p>
     </div>
   )

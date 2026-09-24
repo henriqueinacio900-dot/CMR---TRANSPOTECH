@@ -18,6 +18,9 @@ export default function CardDetalhado({ negocio, euMesmo, onFechar, onAtualizado
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
   const ehAdmin = euMesmo?.perfil === 'administrador'
+  const ETAPAS_EXCLUIVEIS = ['prospeccao', 'contato_realizado', 'orcamento_enviado']
+  const donoPodeExcluir = negocio.consultor?.id === euMesmo?.id && ETAPAS_EXCLUIVEIS.includes(negocio.etapa)
+  const podeExcluir = ehAdmin || donoPodeExcluir
 
   async function confirmarExclusao() {
     setExcluindo(true)
@@ -60,7 +63,7 @@ export default function CardDetalhado({ negocio, euMesmo, onFechar, onAtualizado
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {ehAdmin && (
+            {podeExcluir && (
               <button
                 onClick={() => setConfirmandoExclusao(true)}
                 title="Excluir esta oportunidade"

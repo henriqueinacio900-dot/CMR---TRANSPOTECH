@@ -785,3 +785,25 @@ export async function listarVisitasProgramadasPendentes() {
 export async function concluirVisitaProgramada(negocioId) {
   return atualizarNegocio(negocioId, { proxima_acao: null, proxima_acao_data: null })
 }
+
+// ---------- Documentos dos contratos PM2P (bucket PRIVADO) ----------
+const BUCKET_DOCS_CONTRATO = 'contratos-documentos'
+
+export async function uploadDocumentoContrato(contratoId, arquivo) {
+  const limpo = arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const caminho = `${contratoId}/${Date.now()}-${limpo}`
+  const { error } = await supabase.storage.from(BUCKET_DOCS_CONTRATO).upload(caminho, arquivo)
+  if (error) throw error
+  return { nome: arquivo.name, caminho, tamanho: arquivo.size, enviado_em: new Date().toISOString() }
+}
+
+export async function gerarUrlDocumentoContrato(caminho) {
+  const { data, error } = await supabase.storage.from(BUCKET_DOCS_CONTRATO).createSignedUrl(caminho, 300)
+  if (error) throw error
+  return data.signedUrl
+}
+
+export async function removerDocumentoContrato(caminho) {
+  const { error } = await supabase.storage.from(BUCKET_DOCS_CONTRATO).remove([caminho])
+  if (error) throw error
+}

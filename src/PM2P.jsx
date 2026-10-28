@@ -4,6 +4,7 @@ import {
   listarContratosManutencao, importarContratosManutencao, criarContratoManutencao,
   atualizarContratoManutencao, registrarContatoContrato, excluirContratoManutencao, buscarUltimosContatosPipeline,
   marcarContratoFaturado, listarConsultores,
+  uploadDocumentoContrato, gerarUrlDocumentoContrato, removerDocumentoContrato,
 } from './api'
 import { formatarMoeda } from './constants'
 import { TEMA } from './theme'
@@ -279,6 +280,7 @@ export default function PM2P({ euMesmo }) {
               <th style={thStyle}>% rentabilidade</th>
               <th style={thStyle}>Último contato</th>
               <th style={thStyle}>Status</th>
+              <th style={thStyle}>Documentos</th>
             </tr>
           </thead>
           <tbody>
@@ -320,11 +322,14 @@ export default function PM2P({ euMesmo }) {
                     {contatoReal ? new Date(contatoReal.slice(0, 10) + 'T00:00:00').toLocaleDateString('pt-BR') : 'Nunca'}
                   </td>
                   <td style={{ ...tdStyle, color: statusCalc.cor, fontWeight: 700 }}>{statusCalc.label}</td>
+                  <td style={{ ...tdStyle, color: (c.documentos || []).length ? TEMA.laranjaLuminoso : TEMA.textoDiscreto, fontWeight: 600 }}>
+                    {(c.documentos || []).length ? `📎 ${(c.documentos || []).length}` : '-'}
+                  </td>
                 </tr>
               )
             })}
             {filtrados.length === 0 && (
-              <tr><td colSpan={10} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
+              <tr><td colSpan={11} style={{ ...tdStyle, color: TEMA.textoDiscreto }}>Nenhum contrato encontrado.</td></tr>
             )}
           </tbody>
           {filtrados.length > 0 && (
@@ -336,7 +341,7 @@ export default function PM2P({ euMesmo }) {
                 <td style={tdStyle}>{formatarMoeda(totalRentabilidadeValor)}</td>
                 <td style={tdStyle}></td>
                 <td style={tdStyle}>{rentabilidadeMedia.toFixed(1)}% (média)</td>
-                <td style={tdStyle} colSpan={2}></td>
+                <td style={tdStyle} colSpan={3}></td>
               </tr>
             </tfoot>
           )}
@@ -351,6 +356,7 @@ export default function PM2P({ euMesmo }) {
         <ModalContrato
           contrato={contratoSelecionado}
           onFechar={() => setContratoSelecionado(null)}
+          onMudou={carregar}
           onSalvo={() => { setContratoSelecionado(null); carregar() }}
         />
       )}
@@ -462,6 +468,7 @@ function MeusContratosPm2p({ euMesmo }) {
           contrato={contratoSelecionado}
           ehAdmin={false}
           onFechar={() => setContratoSelecionado(null)}
+          onMudou={carregar}
           onSalvo={() => { setContratoSelecionado(null); carregar() }}
         />
       )}
@@ -469,7 +476,7 @@ function MeusContratosPm2p({ euMesmo }) {
   )
 }
 
-function ModalContrato({ contrato, onFechar, onSalvo, ehAdmin = true }) {
+function ModalContrato({ contrato, onFechar, onSalvo, onMudou, ehAdmin = true }) {
   const [clienteNome, setClienteNome] = useState(contrato?.cliente_nome || '')
   const [modelo, setModelo] = useState(contrato?.modelo || '')
   const [analistaConsultorId, setAnalistaConsultorId] = useState(contrato?.analista_consultor_id || '')
@@ -483,6 +490,46 @@ function ModalContrato({ contrato, onFechar, onSalvo, ehAdmin = true }) {
   const [status, setStatus] = useState(contrato?.status || 'ativo')
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
   const [salvando, setSalvando] = useState(false)
+  const [documentos, setDocumentos] = useState(contrato?.documentos || [])
+  const [enviandoDoc, setEnviandoDoc] = useState(false)
+  const [erroDoc, setErroDoc] = useState('')
+
+  async function enviarDocumentos(e) {
+    const arquivos = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!arquivos.length || !contrato) return
+    setEnviandoDoc(true); setErroDoc('')
+    try {
+      let lista = [...documentos]
+      for (const arq of arquivos) {
+        if (arq.size > 20 * 1024 * 1024) { setErroDoc(`"${arq.name}" passa de 20 MB.`); continue }
+        lista.push(await uploadDocumentoContrato(contrato.id, arq))
+      }
+      await atualizarContratoManutencao(contrato.id, { documentos: lista })
+      setDocumentos(lista)
+      onMudou && onMudou()
+    } catch (err) {
+      setErroDoc('Não deu pra enviar: ' + (err.message || err))
+    } finally {
+      setEnviandoDoc(false)
+    }
+  }
+
+  async function abrirDocumento(doc) {
+    try { window.open(await gerarUrlDocumentoContrato(doc.caminho), '_blank') }
+    catch (err) { setErroDoc('Não deu pra abrir: ' + (err.message || err)) }
+  }
+
+  async function apagarDocumento(doc) {
+    if (!window.confirm(`Remover "${doc.nome}"?`)) return
+    try {
+      await removerDocumentoContrato(doc.caminho)
+      const lista = documentos.filter(d => d.caminho !== doc.caminho)
+      await atualizarContratoManutencao(contrato.id, { documentos: lista })
+      setDocumentos(lista)
+      onMudou && onMudou()
+    } catch (err) { setErroDoc('Não deu pra remover: ' + (err.message || err)) }
+  }
 
   useEffect(() => { listarConsultores().then(setConsultores) }, [])
 
@@ -568,6 +615,25 @@ function ModalContrato({ contrato, onFechar, onSalvo, ehAdmin = true }) {
           </select>
         </Campo>
         <Campo label="Observações"><textarea rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} style={{ ...inputStyleModal, resize: 'vertical' }} /></Campo>
+
+        <Campo label="Documentos do contrato">
+          {contrato ? (
+            <div>
+              {documentos.map(d => (
+                <div key={d.caminho} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #eee', fontSize: 13 }}>
+                  <span onClick={() => abrirDocumento(d)} style={{ flex: 1, cursor: 'pointer', color: '#0b5cad', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📎 {d.nome}</span>
+                  <button type="button" onClick={() => apagarDocumento(d)} style={{ background: 'none', border: 'none', color: '#a32d2d', cursor: 'pointer', fontSize: 12 }}>remover</button>
+                </div>
+              ))}
+              {documentos.length === 0 && <p style={{ fontSize: 12, color: '#777', margin: '0 0 6px' }}>Nenhum documento anexado.</p>}
+              <label style={{ display: 'inline-block', marginTop: 8, padding: '8px 12px', background: '#eee', borderRadius: 8, fontSize: 13, cursor: enviandoDoc ? 'wait' : 'pointer' }}>
+                {enviandoDoc ? 'Enviando...' : '+ Anexar documento'}
+                <input type="file" multiple disabled={enviandoDoc} onChange={enviarDocumentos} accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" style={{ display: 'none' }} />
+              </label>
+              {erroDoc && <p style={{ fontSize: 12, color: '#a32d2d', margin: '6px 0 0' }}>{erroDoc}</p>}
+            </div>
+          ) : <p style={{ fontSize: 12, color: '#777', margin: 0 }}>Salve o contrato primeiro, depois anexe os documentos.</p>}
+        </Campo>
 
         {contrato && (
           <p style={{ fontSize: 11, color: '#777', margin: '0 0 10px' }}>

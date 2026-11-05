@@ -20,6 +20,7 @@ export default function PM2P({ euMesmo }) {
   const [ordenacao, setOrdenacao] = useState('az')
   const [filtroFaturado, setFiltroFaturado] = useState('todos')
   const [filtroConsultor, setFiltroConsultor] = useState('todos')
+  const [filtroStatus, setFiltroStatus] = useState('todos')
   const [modalNovoAberto, setModalNovoAberto] = useState(false)
   const [contratoSelecionado, setContratoSelecionado] = useState(null)
   const [importando, setImportando] = useState(false)
@@ -180,6 +181,7 @@ export default function PM2P({ euMesmo }) {
   if (filtroFaturado === 'faturado') filtrados = filtrados.filter(c => c.faturado)
   if (filtroFaturado === 'nao_faturado') filtrados = filtrados.filter(c => !c.faturado)
   if (filtroConsultor !== 'todos') filtrados = filtrados.filter(c => c.analista_consultor_id === filtroConsultor)
+  if (filtroStatus !== 'todos') filtrados = filtrados.filter(c => statusVencimento(diasAte(c.data_vencimento)).label === filtroStatus)
   filtrados = [...filtrados].sort((a, b) => {
     if (ordenacao === 'az') return a.cliente_nome.localeCompare(b.cliente_nome)
     if (ordenacao === 'rentabilidade') return (b.rentabilidade_percentual || 0) - (a.rentabilidade_percentual || 0)
@@ -259,6 +261,12 @@ export default function PM2P({ euMesmo }) {
           <option value="todos" style={{ color: '#222' }}>Todos os contratos</option>
           <option value="faturado" style={{ color: '#222' }}>Só já faturados</option>
           <option value="nao_faturado" style={{ color: '#222' }}>Só não faturados</option>
+        </select>
+        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={inputStyle}>
+          <option value="todos" style={{ color: '#222' }}>Todos os status</option>
+          <option value="Vencido" style={{ color: '#222' }}>Vencido</option>
+          <option value="A vencer" style={{ color: '#222' }}>A vencer</option>
+          <option value="Em dia" style={{ color: '#222' }}>Em dia</option>
         </select>
         <select value={filtroConsultor} onChange={e => setFiltroConsultor(e.target.value)} style={inputStyle}>
           <option value="todos" style={{ color: '#222' }}>Todos os consultores</option>

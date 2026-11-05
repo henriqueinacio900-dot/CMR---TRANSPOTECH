@@ -35,7 +35,7 @@ export default function PM2P({ euMesmo }) {
 
   useEffect(() => { carregar() }, [])
 
-  const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
+  const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor' || !!euMesmo?.pm2p_ve_tudo
   const ehAnalistaPm2p = euMesmo?.eh_analista_pm2p
   if (euMesmo && !ehAdmin && !ehAnalistaPm2p) {
     return <p style={{ padding: 24, color: TEMA.textoPrincipal }}>Você não tem acesso a essa área.</p>

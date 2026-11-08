@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { adiarProximaAcao } from './api'
-import { classificarPci, formatarMoeda } from './constants'
+import RegistrarContato from './RegistrarContato.jsx'
+import { classificarPci, formatarMoeda, paraISOLocal } from './constants'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -37,6 +38,7 @@ function calcularMotivosEPrioridade(n) {
 export default function FilaLigar({ negocios, onAbrir, onAtualizado }) {
   const [adiandoId, setAdiandoId] = useState(null)
   const [novaData, setNovaData] = useState('')
+  const [registrando, setRegistrando] = useState(null)
 
   const candidatos = negocios.filter(n =>
     ETAPAS_ABERTAS.includes(n.etapa) ||
@@ -52,7 +54,7 @@ export default function FilaLigar({ negocios, onAbrir, onAtualizado }) {
 
   async function confirmarAdiar(negocioId) {
     if (!novaData) return
-    await adiarProximaAcao(negocioId, novaData)
+    await adiarProximaAcao(negocioId, paraISOLocal(novaData))
     setAdiandoId(null)
     setNovaData('')
     onAtualizado()
@@ -90,6 +92,7 @@ export default function FilaLigar({ negocios, onAbrir, onAtualizado }) {
                 {telefone && (
                   <a href={`https://wa.me/55${telefone}`} target="_blank" rel="noreferrer" style={botaoLink} onClick={e => e.stopPropagation()}>WhatsApp</a>
                 )}
+                <button onClick={() => setRegistrando(n)} style={{ ...botaoLink, background: '#F77E01', color: '#fff', border: '1px solid #F77E01', fontWeight: 600 }}>Registrar contato</button>
                 <button onClick={() => onAbrir(n.id)} style={botaoLink}>Abrir negócio</button>
                 <button onClick={() => setAdiandoId(adiandoId === n.id ? null : n.id)} style={botaoLink}>Adiar</button>
               </div>
@@ -106,6 +109,14 @@ export default function FilaLigar({ negocios, onAbrir, onAtualizado }) {
           )
         })}
       </div>
+
+      {registrando && (
+        <RegistrarContato
+          negocio={registrando}
+          onFechar={() => setRegistrando(null)}
+          onSalvo={() => { setRegistrando(null); onAtualizado() }}
+        />
+      )}
     </div>
   )
 }

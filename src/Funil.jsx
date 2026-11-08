@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { TEMA } from './theme'
 import { listarNegocios, listarDepartamentos, listarConsultores, getMeuConsultor } from './api'
 import { ETAPAS, formatarMoeda } from './constants'
+import PainelConversao from './PainelConversao.jsx'
 
 const ETAPAS_FUNIL = ETAPAS.filter(e => e.key !== 'perdida')
 const CORES_FUNIL = ['#F9D9B5', '#F4C08C', '#EFA763', '#EA8E3A', '#3b6d11']
@@ -14,6 +15,11 @@ export default function Funil() {
   const [vendedorSelecionado, setVendedorSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [euMesmo, setEuMesmo] = useState(null)
+  const hoje = new Date()
+  const ha90 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 90)
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const [dataInicio, setDataInicio] = useState(iso(ha90))
+  const [dataFim, setDataFim] = useState(iso(hoje))
 
   useEffect(() => {
     Promise.all([listarNegocios(), listarDepartamentos(), listarConsultores(), getMeuConsultor()]).then(([n, d, c, eu]) => {
@@ -38,16 +44,22 @@ export default function Funil() {
     return { ...e, qtd: itens.length, valor: itens.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) }
   })
 
-  const primeiraQtd = linhas[0]?.qtd || 1
   const maiorQtd = Math.max(1, ...linhas.map(l => l.qtd))
-  const conversaoGeral = primeiraQtd > 0 ? ((linhas[linhas.length - 1]?.qtd || 0) / primeiraQtd * 100) : 0
+  const inicioPeriodo = new Date(dataInicio + 'T00:00:00')
+  const fimPeriodo = new Date(dataFim + 'T23:59:59')
 
   return (
     <div style={{ padding: 24, color: TEMA.textoPrincipal }}>
       <p style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Funil de conversão</p>
       <p style={{ fontSize: 13, color: '#777', margin: '0 0 16px' }}>
-        Conversão geral (Prospecção → Ganha): <strong style={{ color: '#3b6d11' }}>{conversaoGeral.toFixed(1)}%</strong>
+        Volume atual de cada etapa (carteira) e, abaixo, a conversão calculada pelo histórico dos mesmos negócios.
       </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#999' }}>Período da conversão:</span>
+        <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={selectStyle} />
+        <span style={{ fontSize: 12, color: '#999' }}>até</span>
+        <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={selectStyle} />
+      </div>
 
       {(euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor') && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
@@ -64,17 +76,10 @@ export default function Funil() {
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         {linhas.map((l, i) => {
-          const anterior = linhas[i - 1]
-          const conversaoPasso = anterior && anterior.qtd > 0 ? (l.qtd / anterior.qtd * 100) : null
           const larguraPct = 20 + (l.qtd / maiorQtd) * 80
 
           return (
             <div key={l.key} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {conversaoPasso !== null && (
-                <div style={{ fontSize: 12, color: '#666', fontWeight: 700, padding: '4px 0', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: conversaoPasso >= 50 ? '#3b6d11' : '#a32d2d' }}>▼ {conversaoPasso.toFixed(1)}%</span>
-                </div>
-              )}
               <div
                 style={{
                   width: `${larguraPct}%`, maxWidth: 640,
@@ -91,6 +96,13 @@ export default function Funil() {
           )
         })}
       </div>
+
+      <PainelConversao
+        negocios={filtrados}
+        inicio={inicioPeriodo}
+        fim={fimPeriodo}
+        rotuloPeriodo={`${inicioPeriodo.toLocaleDateString('pt-BR')} – ${fimPeriodo.toLocaleDateString('pt-BR')}`}
+      />
     </div>
   )
 }

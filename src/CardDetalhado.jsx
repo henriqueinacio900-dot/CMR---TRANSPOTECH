@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react'
 import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
   listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha,
-  recalcularProximoPassoOrcamento, excluirNegocio,
+  recalcularProximoPassoOrcamento, excluirNegocio, moverParaOrcamento,
 } from './api'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
   formatarMoeda, formatarData, formatarTelefoneInput, paraISOLocal, paraDatetimeLocalInput,
 } from './constants'
 import PciForm from './PciForm.jsx'
+import CamposOrcamento from './CamposOrcamento.jsx'
+import {
+  validarOrcamento, validarPerdida, validarGanha, ehMotivoCompraAdiada, temErros,
+  hojeISO, primeiroDiaProximoMesISO,
+} from './regrasEtapa'
 
 const ABAS_BASE = ['Resumo', 'Cliente e contatos', 'Oportunidade', 'PCI', 'Atividades', 'Histórico']
 
@@ -135,6 +140,9 @@ function AbaResumo({ negocio, onAtualizado }) {
           <Linha label="Valor final" valor={formatarMoeda(negocio.valor_final)} />
           <Linha label="Desconto concedido" valor={formatarMoeda(negocio.desconto_valor)} />
           <Linha label="Status" valor={negocio.status_faturamento === 'faturado' ? 'Faturado' : 'Previsto no mês'} />
+          {negocio.status_faturamento !== 'faturado' && (
+            <Linha label="Previsão de faturamento" valor={negocio.previsao_faturamento ? new Date(negocio.previsao_faturamento + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada (conta no mês do fechamento)'} />
+          )}
           <EditarGanha negocio={negocio} onAtualizado={onAtualizado} />
         </>
       )}
@@ -169,10 +177,23 @@ function EditarGanha({ negocio, onAtualizado }) {
     }
   }
 
+  async function salvarPrevisao(novaData) {
+    setSalvando(true)
+    try {
+      await atualizarNegocio(negocio.id, { previsao_faturamento: novaData || null })
+      onAtualizado()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   async function salvarSoStatus(novoStatus) {
     setSalvando(true)
     try {
-      await atualizarNegocio(negocio.id, { status_faturamento: novoStatus })
+      await atualizarNegocio(negocio.id, {
+        status_faturamento: novoStatus,
+        ...(novoStatus === 'faturado' ? { previsao_faturamento: null } : {}),
+      })
       onAtualizado()
     } finally {
       setSalvando(false)
@@ -194,6 +215,18 @@ function EditarGanha({ negocio, onAtualizado }) {
             <option value="faturado">Faturado</option>
           </select>
         </div>
+        {negocio.status_faturamento !== 'faturado' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: '#777' }}>Previsão de faturamento:</span>
+            <input
+              type="date"
+              defaultValue={negocio.previsao_faturamento || ''}
+              onBlur={e => { if ((e.target.value || '') !== (negocio.previsao_faturamento || '')) salvarPrevisao(e.target.value) }}
+              disabled={salvando}
+              style={{ ...inputStyle, width: 'auto', padding: '4px 8px', fontSize: 12 }}
+            />
+          </div>
+        )}
         <button onClick={() => setEditando(true)} style={{ ...botaoPequeno, alignSelf: 'flex-start' }}>✏️ Editar venda</button>
       </div>
     )
@@ -353,8 +386,11 @@ function AbaOportunidade({ negocio, onAtualizado }) {
     setSalvando(true)
     setErro('')
     try {
+      const mudouAcao = (campos.proxima_acao || '') !== (negocio.proxima_acao || '')
+        || paraISOLocal(campos.proxima_acao_data) !== (negocio.proxima_acao_data ? new Date(negocio.proxima_acao_data).toISOString() : null)
       await atualizarNegocio(negocio.id, {
         ...campos,
+        ...(campos.proxima_acao && mudouAcao ? { proxima_acao_origem: 'manual' } : {}),
         origem: campos.origem || null,
         temperatura: campos.temperatura || null,
         proxima_acao: campos.proxima_acao || null,
@@ -527,6 +563,19 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [proximaAcaoNova, setProximaAcaoNova] = useState('')
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [mostrarOrcamento, setMostrarOrcamento] = useState(false)
+  const [orc, setOrc] = useState({
+    numero_orcamento: negocio.numero_orcamento || '',
+    valor_cotacao: negocio.valor_cotacao || '',
+    proxima_acao: negocio.proxima_acao || '',
+    proxima_acao_data: paraDatetimeLocalInput(negocio.proxima_acao_data),
+  })
+  const [errosOrc, setErrosOrc] = useState({})
+  const [dataRetomada, setDataRetomada] = useState('')
+  const [errosPerda, setErrosPerda] = useState({})
+  const [previsaoFaturamento, setPrevisaoFaturamento] = useState(hojeISO())
+  const [errosGanha, setErrosGanha] = useState({})
+  const [erroAcao, setErroAcao] = useState('')
 
   useEffect(() => {
     if (mostrarPerdida) listarMotivosPerda().then(setMotivos)
@@ -536,6 +585,9 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     if (novaEtapa === negocio.etapa) return
     if (novaEtapa === 'perdida') { setMostrarPerdida(true); return }
     if (novaEtapa === 'ganha') { setMostrarGanha(true); return }
+
+    // Orçamento enviado: número, valor e próxima ação com data no mesmo formulário
+    if (novaEtapa === 'orcamento_enviado') { setMostrarOrcamento(true); return }
 
     // "Faturamento próximo mês" é só lembrete — não exige próxima ação pra mover
     if (novaEtapa === 'faturamento_proximo_mes') {
@@ -581,11 +633,44 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     }
   }
 
-  async function confirmarPerdida() {
-    if (!motivoId) return
+  async function confirmarOrcamento() {
+    const v = validarOrcamento(orc)
+    setErrosOrc(v)
+    if (temErros(v)) return
+    setErroAcao('')
     setSalvando(true)
     try {
-      await marcarPerdida(negocio.id, { motivo_perda_id: motivoId, observacoes, concorrente: concorrente || null, pode_reativar: true })
+      await moverParaOrcamento(negocio.id, {
+        numero_orcamento: orc.numero_orcamento,
+        valor_cotacao: orc.valor_cotacao,
+        proxima_acao: orc.proxima_acao,
+        proxima_acao_data: paraISOLocal(orc.proxima_acao_data),
+        data_orcamento: negocio.data_orcamento || undefined,
+      })
+      onAtualizado()
+      onFechar()
+    } catch (e) {
+      console.error(e)
+      setErroAcao('Não deu pra mover: ' + (e.message || 'erro desconhecido'))
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const motivoEscolhido = motivos.find(m => m.id === motivoId)
+  const ehCompraAdiada = ehMotivoCompraAdiada(motivoEscolhido?.descricao)
+
+  async function confirmarPerdida() {
+    const v = validarPerdida({ motivo_perda_id: motivoId, motivo_descricao: motivoEscolhido?.descricao, data_retomada: dataRetomada })
+    setErrosPerda(v)
+    if (temErros(v)) return
+    setSalvando(true)
+    try {
+      await marcarPerdida(negocio.id, {
+        motivo_perda_id: motivoId, observacoes, concorrente: concorrente || null, pode_reativar: true,
+        // Compra adiada: a data de retomada alimenta a Reativação já existente (aparece lá na data combinada)
+        data_sugerida_reativacao: ehCompraAdiada ? dataRetomada : null,
+      })
       onAtualizado()
       onFechar()
     } finally {
@@ -594,12 +679,15 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   }
 
   async function confirmarGanha() {
+    const v = validarGanha({ status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
+    setErrosGanha(v)
+    if (temErros(v)) return
     setSalvando(true)
     try {
       const pct = Number(descontoPercentual || 0)
       const desconto = (negocio.valor_cotacao || 0) * (pct / 100)
       const valorFinal = (negocio.valor_cotacao || 0) - desconto
-      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento })
+      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
       onAtualizado()
       onFechar()
     } finally {
@@ -609,7 +697,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
 
   return (
     <div style={{ borderTop: '1px solid #eee', padding: '12px 20px' }}>
-      {!mostrarPerdida && !mostrarGanha && !mostrarExigirAcao && (
+      {!mostrarPerdida && !mostrarGanha && !mostrarExigirAcao && !mostrarOrcamento && (
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={novaEtapa} onChange={e => setNovaEtapa(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             {ETAPAS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
@@ -617,6 +705,18 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
           <button onClick={aplicarMudanca} disabled={salvando || novaEtapa === negocio.etapa} style={botaoPequeno}>
             {salvando ? 'Movendo...' : 'Mover'}
           </button>
+        </div>
+      )}
+
+      {mostrarOrcamento && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Mover para Orçamento enviado</p>
+          <CamposOrcamento valores={orc} onChange={setOrc} erros={errosOrc} />
+          {erroAcao && <p style={{ color: '#a32d2d', fontSize: 12, margin: 0 }}>{erroAcao}</p>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setMostrarOrcamento(false); setErrosOrc({}) }} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
+            <button onClick={confirmarOrcamento} disabled={salvando} style={botaoPequeno}>{salvando ? 'Movendo...' : 'Confirmar e mover'}</button>
+          </div>
         </div>
       )}
 
@@ -642,15 +742,24 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
       {mostrarPerdida && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como perdida</p>
-          <select value={motivoId} onChange={e => setMotivoId(e.target.value)} style={inputStyle}>
-            <option value="">Motivo da perda...</option>
+          <select value={motivoId} onChange={e => { setMotivoId(e.target.value); setErrosPerda({}) }} style={inputStyle}>
+            <option value="">Motivo da perda *</option>
             {motivos.map(m => <option key={m.id} value={m.id}>{m.descricao}</option>)}
           </select>
+          {errosPerda.motivo_perda_id && <p style={{ color: '#a32d2d', fontSize: 11, margin: 0 }}>{errosPerda.motivo_perda_id}</p>}
+          {ehCompraAdiada && (
+            <>
+              <label style={{ fontSize: 12, color: '#666' }}>Quando retomar a negociação? *</label>
+              <input type="date" value={dataRetomada} onChange={e => setDataRetomada(e.target.value)} style={inputStyle} />
+              {errosPerda.data_retomada && <p style={{ color: '#a32d2d', fontSize: 11, margin: 0 }}>{errosPerda.data_retomada}</p>}
+              <p style={{ fontSize: 11, color: '#999', margin: 0 }}>Nessa data o cliente aparece na aba Reativação.</p>
+            </>
+          )}
           <input placeholder="Concorrente (se souber)" value={concorrente} onChange={e => setConcorrente(e.target.value)} style={inputStyle} />
           <textarea placeholder="Observação" rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} style={inputStyle} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarPerdida(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
-            <button onClick={confirmarPerdida} disabled={salvando || !motivoId} style={{ ...botaoPequeno, background: '#a32d2d' }}>Confirmar perda</button>
+            <button onClick={confirmarPerdida} disabled={salvando} style={{ ...botaoPequeno, background: '#a32d2d' }}>Confirmar perda</button>
           </div>
         </div>
       )}
@@ -668,6 +777,18 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
             <option value="previsto">Previsto no mês (aprovado, ainda vai faturar)</option>
             <option value="faturado">Já faturado</option>
           </select>
+          {statusFaturamento !== 'faturado' && (
+            <>
+              <label style={{ fontSize: 12, color: '#666' }}>Previsão de faturamento *</label>
+              <input type="date" value={previsaoFaturamento} onChange={e => setPrevisaoFaturamento(e.target.value)} style={inputStyle} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" onClick={() => setPrevisaoFaturamento(hojeISO())} style={{ ...botaoPequeno, background: '#eee', color: '#333', fontSize: 11 }}>Este mês</button>
+                <button type="button" onClick={() => setPrevisaoFaturamento(primeiroDiaProximoMesISO())} style={{ ...botaoPequeno, background: '#DFF5D8', color: '#245209', fontSize: 11 }}>Mês que vem</button>
+              </div>
+              {errosGanha.previsao_faturamento && <p style={{ color: '#a32d2d', fontSize: 11, margin: 0 }}>{errosGanha.previsao_faturamento}</p>}
+              <p style={{ fontSize: 11, color: '#999', margin: 0 }}>Vai direto para o Provisionado. Se a data cair no mês seguinte, aparece em "Próximo mês".</p>
+            </>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setMostrarGanha(false)} style={{ ...botaoPequeno, background: '#eee', color: '#333' }}>Cancelar</button>
             <button

@@ -13,6 +13,7 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
   const [etapaLocal, setEtapaLocal] = useState('inicial') // inicial | escolher_tipo | escolher_resultado | orcamento | ligar_futuro
   const [tipoContato, setTipoContato] = useState(null)
   const [valor, setValor] = useState('')
+  const [numeroOrcamento, setNumeroOrcamento] = useState('')
   const [temperatura, setTemperatura] = useState('morno')
   const [dataFutura, setDataFutura] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -43,7 +44,7 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
     setSalvando(true)
     try {
       await registrarInteracao({ negocio_id: negocio.id, tipo: tipoContato, resultado: 'gerar_orcamento' })
-      await gerarOrcamento(negocio.id, { valor_cotacao: Number(valor), temperatura })
+      await gerarOrcamento(negocio.id, { valor_cotacao: Number(valor), temperatura, numero_orcamento: numeroOrcamento })
       onAtualizado()
     } finally {
       setSalvando(false)
@@ -166,9 +167,15 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
         {etapaLocal === 'orcamento' && (
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input
+              placeholder="Nº do orçamento *"
+              value={numeroOrcamento}
+              onChange={e => setNumeroOrcamento(e.target.value)}
+              style={inputPequeno}
+            />
+            <input
               type="number"
               step="0.01"
-              placeholder="Valor da cotação (R$)"
+              placeholder="Valor da cotação (R$) *"
               value={valor}
               onChange={e => setValor(e.target.value)}
               style={inputPequeno}
@@ -178,7 +185,7 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
               <option value="morno">Morno</option>
               <option value="quente">Quente</option>
             </select>
-            <button disabled={salvando || !valor} style={btnPrincipal} onClick={confirmarOrcamento}>
+            <button disabled={salvando || !valor || !numeroOrcamento.trim()} style={btnPrincipal} onClick={confirmarOrcamento}>
               Confirmar e mover pra negociação
             </button>
           </div>

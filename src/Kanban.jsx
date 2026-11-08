@@ -24,6 +24,8 @@ import Agenda from './Agenda.jsx'
 import Leads from './Leads.jsx'
 import PM2P from './PM2P.jsx'
 import RelatorioVisita from './RelatorioVisita.jsx'
+import PainelConversao from './PainelConversao.jsx'
+import { taxaGanho } from './funilConversao'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 
@@ -260,7 +262,7 @@ export default function Kanban() {
           />
         )}
 
-        {visao === 'clientes' && <Clientes />}
+        {visao === 'clientes' && <Clientes onNegocioCriado={carregar} />}
         {visao === 'atividades' && (
           <Atividades onAbrirRelatorioVisita={a => { setAtividadeParaRelatorio(a); setVisao('relatorio_visita') }} />
         )}
@@ -381,10 +383,11 @@ function calcularMetricas(negocios, periodo) {
   const valorGanhoMes = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const valorGanhoMesAnterior = ganhosMesAnterior.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
 
-  const perdidosMes = negocios.filter(n => n.etapa === 'perdida' && dentro(n.data_perda, inicio, fim))
-  const perdidosMesAnterior = negocios.filter(n => n.etapa === 'perdida' && dentro(n.data_perda, inicioAnterior, fimAnterior))
-  const conversaoMes = (ganhosMes.length + perdidosMes.length) > 0 ? ganhosMes.length / (ganhosMes.length + perdidosMes.length) * 100 : 0
-  const conversaoMesAnterior = (ganhosMesAnterior.length + perdidosMesAnterior.length) > 0 ? ganhosMesAnterior.length / (ganhosMesAnterior.length + perdidosMesAnterior.length) * 100 : 0
+  // Taxa de ganho: Ganhos ÷ (Ganhos + Perdidos) encerrados no período — mesmo critério de Relatórios e do painel do funil.
+  const tgMes = taxaGanho(negocios, inicio, fim)
+  const tgAnterior = taxaGanho(negocios, inicioAnterior, fimAnterior)
+  const conversaoMes = tgMes.taxa ?? 0
+  const conversaoMesAnterior = tgAnterior.taxa ?? 0
 
   const followupsAtrasados = abertos.filter(n => n.proxima_acao_data && new Date(n.proxima_acao_data) < agora).length
 
@@ -397,7 +400,7 @@ function calcularMetricas(negocios, periodo) {
     pipelineTotal, pipelinePonderado, valorGanhoMes, ticketMedio,
     variacaoGanho: valorGanhoMesAnterior > 0 ? ((valorGanhoMes - valorGanhoMesAnterior) / valorGanhoMesAnterior * 100) : null,
     conversaoMes,
-    variacaoConversao: perdidosMesAnterior.length + ganhosMesAnterior.length > 0 ? (conversaoMes - conversaoMesAnterior) : null,
+    variacaoConversao: tgAnterior.total > 0 && tgMes.total > 0 ? (conversaoMes - conversaoMesAnterior) : null,
     followupsAtrasados,
   }
 }
@@ -767,9 +770,11 @@ function VisaoGeral(props) {
   const filtradosPeriodo = filtrados.filter(n => {
     // Ganha/Perdida: o que manda é a data de fechamento (atualizado_em), não a de criação.
     // Etapas abertas: continua usando a data de criação (1º contato).
-    const dataReferencia = (n.etapa === 'ganha' || n.etapa === 'perdida') ? n.atualizado_em : n.criado_em
+    const dataReferencia = n.etapa === 'ganha' ? n.atualizado_em
+      : n.etapa === 'perdida' ? (n.data_perda || n.atualizado_em)
+      : n.criado_em
     if (!dataReferencia) return false
-    const d = new Date(dataReferencia)
+    const d = new Date(String(dataReferencia).length === 10 ? `${dataReferencia}T12:00:00` : dataReferencia)
     return d >= periodo.inicio && d <= periodo.fim
   })
   const followupsHoje = filtrados.filter(n => {
@@ -788,7 +793,7 @@ function VisaoGeral(props) {
     <div style={{ padding: 24 }}>
       <div className="tp-grid-4" style={{ marginBottom: 20 }}>
         <KpiCard icone={CircleDollarSign} label="Ganho no mês" valor={formatarMoeda(metrics.valorGanhoMes)} variacao={metrics.variacaoGanho} />
-        <KpiCard icone={TrendingUp} label="Conversão" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
+        <KpiCard icone={TrendingUp} label="Taxa de ganho" valor={`${metrics.conversaoMes.toFixed(1)}%`} variacao={metrics.variacaoConversao} sufixoVariacao=" p.p." />
         <KpiCard icone={Scale} label="Ticket médio (TKM)" valor={formatarMoeda(metrics.ticketMedio)} />
         <KpiCard icone={Clock} label="Follow-ups atrasados" valor={metrics.followupsAtrasados} negativo />
       </div>
@@ -854,7 +859,7 @@ function PipelineBoard(props) {
           </span>
         )}
       </div>
-      <QuadroKanban filtrados={filtradosPorOrcamento} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} periodo={props.periodo} />
+      <QuadroKanban filtrados={filtradosPorOrcamento} onAbrir={props.onAbrir} onAtualizado={props.onAtualizado} colunasVisiveis={7} periodo={props.periodo} baseConversao={props.filtrados} />
     </div>
   )
 }
@@ -880,7 +885,8 @@ function PainelMeta({ negocios, euMesmo, metas }) {
   const meusGanhos = meusNegocios.filter(n => n.etapa === 'ganha')
   const meusPerdidos = meusNegocios.filter(n => n.etapa === 'perdida')
   const tkm = meusGanhos.length > 0 ? meusGanhos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / meusGanhos.length : 0
-  const conversao = (meusGanhos.length + meusPerdidos.length) > 0 ? meusGanhos.length / (meusGanhos.length + meusPerdidos.length) * 100 : 0
+  const hojeM = new Date()
+  const conversao = taxaGanho(meusNegocios, new Date(hojeM.getFullYear(), hojeM.getMonth(), 1), new Date(hojeM.getFullYear(), hojeM.getMonth() + 1, 0, 23, 59, 59)).taxa ?? 0
 
   if (!minhaMeta || !minhaMeta.valor_meta) {
     return (
@@ -902,7 +908,7 @@ function PainelMeta({ negocios, euMesmo, metas }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10 }}>
         <MetaCard label="Meta" valor={formatarMoeda(minhaMeta.valor_meta)} />
         <MetaCard label="Ticket médio" valor={formatarMoeda(tkm)} />
-        <MetaCard label="Conversão" valor={`${conversao.toFixed(0)}%`} />
+        <MetaCard label="Taxa de ganho (mês)" valor={`${conversao.toFixed(0)}%`} />
         <MetaCard label="Vendas necessárias" valor={vendasNecessarias.toFixed(1)} />
         <MetaCard label="Vendas por dia útil" valor={vendasPorDia.toFixed(2)} cor="#F77E01" />
       </div>
@@ -940,7 +946,7 @@ function FiltrosLinha({ departamentos, consultores, deptSelecionado, setDeptSele
   )
 }
 
-function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, periodo }) {
+function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, periodo, baseConversao }) {
   const etapas = colunasVisiveis === 5
     ? ETAPAS.filter(e => e.key !== 'ganha' && e.key !== 'perdida')
     : ETAPAS
@@ -983,51 +989,15 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
       </div>
       </div>
       <ListaRetorno negocios={filtrados} onAtualizado={onAtualizado} />
-      <ConversaoEtapas filtrados={filtrados} />
+      {periodo && (
+        <PainelConversao
+          negocios={baseConversao || filtrados}
+          inicio={periodo.inicio}
+          fim={periodo.fim}
+          rotuloPeriodo={periodo.rotulo}
+        />
+      )}
     </>
-  )
-}
-
-const ETAPAS_FUNIL_CONVERSAO = [
-  { key: 'prospeccao', label: 'Prospecção' },
-  { key: 'contato_realizado', label: 'Contato realizado' },
-  { key: 'orcamento_enviado', label: 'Orçamento enviado' },
-  { key: 'negociacao_decisao', label: 'Negociação/decisão' },
-  { key: 'ganha', label: 'Ganha' },
-]
-
-function ConversaoEtapas({ filtrados }) {
-  const contagens = ETAPAS_FUNIL_CONVERSAO.map(e => ({
-    ...e,
-    total: filtrados.filter(n => n.etapa === e.key).length,
-  }))
-
-  return (
-    <div style={{ marginTop: 24, background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 16 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 12px', color: '#333' }}>Conversão entre etapas</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
-        {contagens.map((c, i) => {
-          const anterior = contagens[i - 1]
-          const conversao = anterior && anterior.total > 0 ? (c.total / anterior.total * 100) : null
-          return (
-            <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-              {i > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 6px' }}>
-                  <span style={{ fontSize: 11, color: '#3b6d11', fontWeight: 700 }}>
-                    {conversao !== null ? `${conversao.toFixed(1)}%` : '-'}
-                  </span>
-                  <span style={{ fontSize: 14, color: '#bbb' }}>→</span>
-                </div>
-              )}
-              <div style={{ border: '1px solid #eee', borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110 }}>
-                <p style={{ fontSize: 11, color: '#777', margin: '0 0 4px', whiteSpace: 'nowrap' }}>{c.label}</p>
-                <p style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{c.total}</p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
 

@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable'
 import { listarNegocios, contarInteracoesMes, listarConfiguracoesAutomacao, listarConsultores, listarMetasMes, salvarMetaMensal, listarDepartamentos } from './api'
 import { ETAPAS, classificarPci, formatarMoeda } from './constants'
 import { TEMA } from './theme'
+import { taxaGanho } from './funilConversao'
 
 const ETAPAS_ABERTAS = ['prospeccao', 'contato_realizado', 'orcamento_enviado', 'negociacao_decisao']
 const ETAPA_PARA_CONFIG = {
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [departamentos, setDepartamentos] = useState([])
   const [metas, setMetas] = useState([])
   const [carregando, setCarregando] = useState(true)
+  const [periodoTaxa, setPeriodoTaxa] = useState('este_mes')
 
   const agora = new Date()
 
@@ -61,9 +63,21 @@ export default function Dashboard() {
   }, 0)
   const valorGanhoMes = ganhosMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
   const valorPerdidoMes = perdidosMes.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
-  const taxaConversao = (ganhos.length + perdidos.length) > 0
-    ? (ganhos.length / (ganhos.length + perdidos.length) * 100)
-    : 0
+  // Taxa de ganho: mesmo critério da Visão geral — Ganhos ÷ (Ganhos + Perdidos) encerrados no período.
+  const faixaTaxa = (() => {
+    const a = new Date()
+    if (periodoTaxa === 'mes_passado') return { inicio: new Date(a.getFullYear(), a.getMonth() - 1, 1), fim: new Date(a.getFullYear(), a.getMonth(), 0, 23, 59, 59), rotulo: 'mês passado' }
+    if (periodoTaxa === 'ultimos_3_meses') return { inicio: new Date(a.getFullYear(), a.getMonth() - 2, 1), fim: new Date(a.getFullYear(), a.getMonth() + 1, 0, 23, 59, 59), rotulo: 'últimos 3 meses' }
+    if (periodoTaxa === 'este_ano') return { inicio: new Date(a.getFullYear(), 0, 1), fim: new Date(a.getFullYear(), 11, 31, 23, 59, 59), rotulo: 'este ano' }
+    if (periodoTaxa === 'tudo') return { inicio: new Date(2000, 0, 1), fim: new Date(2100, 0, 1), rotulo: 'todo o período' }
+    return { inicio: new Date(a.getFullYear(), a.getMonth(), 1), fim: new Date(a.getFullYear(), a.getMonth() + 1, 0, 23, 59, 59), rotulo: 'este mês' }
+  })()
+  const tg = taxaGanho(negocios, faixaTaxa.inicio, faixaTaxa.fim)
+  const taxaConversao = tg.taxa ?? 0
+  const encerradosNoPeriodo = negocios.filter(n =>
+    (n.etapa === 'ganha' && taxaGanho([n], faixaTaxa.inicio, faixaTaxa.fim).ganhos === 1) ||
+    (n.etapa === 'perdida' && taxaGanho([n], faixaTaxa.inicio, faixaTaxa.fim).perdidos === 1)
+  )
   const ticketMedio = ganhos.length > 0
     ? ganhos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0) / ganhos.length
     : 0
@@ -85,8 +99,8 @@ export default function Dashboard() {
     return nota !== undefined && classificarPci(nota).sigla === 'A' && !n.ultima_interacao_em
   }).length
 
-  const porVendedor = agrupar(negocios, n => n.consultor?.nome || 'Sem consultor')
-  const porDepartamento = agrupar(negocios, n => n.departamento?.nome || 'Sem departamento')
+  const porVendedor = agrupar(encerradosNoPeriodo, n => n.consultor?.nome || 'Sem consultor')
+  const porDepartamento = agrupar(encerradosNoPeriodo, n => n.departamento?.nome || 'Sem departamento')
 
   function gerarRelatorioPDF() {
     const doc = new jsPDF()
@@ -114,7 +128,7 @@ export default function Dashboard() {
         ['Pipeline ponderado', formatarMoeda(pipelinePonderado)],
         ['Ganho no mês', formatarMoeda(valorGanhoMes)],
         ['Perdido no mês', formatarMoeda(valorPerdidoMes)],
-        ['Taxa de conversão', `${taxaConversao.toFixed(0)}%`],
+        [`Taxa de ganho (${faixaTaxa.rotulo})`, `${tg.taxa === null ? '—' : taxaConversao.toFixed(0) + '%'}`],
         ['Ticket médio', formatarMoeda(ticketMedio)],
         ['Prospecções no mês', String(prospeccoesMes)],
         ['Orçamentos enviados no mês', String(orcamentosMes)],
@@ -190,7 +204,7 @@ export default function Dashboard() {
           <Card label="Perdido no mês" valor={formatarMoeda(valorPerdidoMes)} cor="#a32d2d" />
         </div>
         <div style={grid4}>
-          <Card label="Taxa de conversão" valor={`${taxaConversao.toFixed(0)}%`} />
+          <Card label={`Taxa de ganho (${faixaTaxa.rotulo})`} valor={tg.taxa === null ? '—' : `${taxaConversao.toFixed(0)}%`} />
           <Card label="Ticket médio" valor={formatarMoeda(ticketMedio)} />
           <Card label="Negócios ganhos no mês" valor={ganhosMes.length} />
           <Card label="Contatos realizados no mês" valor={contatosMes} />
@@ -210,6 +224,18 @@ export default function Dashboard() {
           <Card label="Clientes PCI A sem contato" valor={pciASemContato} cor="#a32d2d" />
         </div>
       </Secao>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: TEMA.textoSecundario }}>Período da taxa de ganho e das tabelas de conversão:</span>
+        <select value={periodoTaxa} onChange={e => setPeriodoTaxa(e.target.value)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, background: '#fff', color: '#222' }}>
+          <option value="este_mes">Este mês</option>
+          <option value="mes_passado">Mês passado</option>
+          <option value="ultimos_3_meses">Últimos 3 meses</option>
+          <option value="este_ano">Este ano</option>
+          <option value="tudo">Todo o período</option>
+        </select>
+        <span style={{ fontSize: 11, color: TEMA.textoDiscreto }}>Ganhos ÷ (Ganhos + Perdidos) encerrados no período — o mesmo critério da Visão geral.</span>
+      </div>
 
       <Secao titulo="Conversão por vendedor">
         <TabelaConversao dados={porVendedor} />

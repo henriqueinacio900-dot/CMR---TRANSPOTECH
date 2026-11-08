@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { SEQUENCIA_ORCAMENTO } from './constants'
+import { cadenciaDevePular } from './regrasEtapa'
 
 export async function getMeuConsultor() {
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,10 +26,22 @@ export async function listarDepartamentos() {
   return data
 }
 
-export async function listarNegocios() {
-  const { data, error } = await supabase
-    .from('negocios')
-    .select(`
+// Colunas criadas pela migração "melhorias-fluxo-comercial.sql". Se o SQL ainda não foi rodado,
+// o app continua funcionando sem elas (nada quebra por ordem de deploy).
+const COLUNAS_NOVAS_NEGOCIO = ['proxima_acao_origem', 'previsao_faturamento', 'unidade_id', 'equipamento_id']
+
+function erroDeColunaInexistente(error) {
+  const msg = String(error?.message || '')
+  return error?.code === '42703' || error?.code === 'PGRST204' || /does not exist|Could not find the .* column/i.test(msg)
+}
+
+function semColunasNovas(dados) {
+  const limpo = { ...dados }
+  COLUNAS_NOVAS_NEGOCIO.forEach(c => delete limpo[c])
+  return limpo
+}
+
+const SELECT_NEGOCIOS_BASE = `
       id, etapa, substatus, valor_cotacao, valor_final, temperatura, ultima_interacao_em, data_retorno,
       titulo, produto_servico, descricao_necessidade, origem, probabilidade_fechamento, previsao_fechamento,
       urgencia, numero_orcamento, data_orcamento, validade_proposta, observacoes,
@@ -40,8 +53,20 @@ export async function listarNegocios() {
       consultor:consultores ( id, nome ),
       motivo_perda:motivos_perda ( descricao ),
       avaliacoes_pci ( nota_total )
-    `)
+    `
+
+export async function listarNegocios() {
+  let { data, error } = await supabase
+    .from('negocios')
+    .select(`${SELECT_NEGOCIOS_BASE}, proxima_acao_origem, previsao_faturamento, unidade_id, equipamento_id`)
     .order('atualizado_em', { ascending: false })
+
+  if (error && erroDeColunaInexistente(error)) {
+    ;({ data, error } = await supabase
+      .from('negocios')
+      .select(SELECT_NEGOCIOS_BASE)
+      .order('atualizado_em', { ascending: false }))
+  }
 
   if (error) {
     console.error('Erro ao listar negócios:', error)
@@ -83,34 +108,33 @@ export async function buscarClientesDuplicados({ cnpj, razao_social, telefone, e
 
 export async function criarNegocio(dados) {
   const consultor = await getMeuConsultor()
-  const { data, error } = await supabase
+  const inserir = campos => supabase
     .from('negocios')
-    .insert({ ...dados, consultor_id: dados.consultor_id || consultor?.id })
+    .insert({ ...campos, consultor_id: campos.consultor_id || consultor?.id })
     .select()
     .single()
+  let { data, error } = await inserir(dados)
+  if (error && erroDeColunaInexistente(error)) ({ data, error } = await inserir(semColunasNovas(dados)))
   if (error) throw error
   await registrarHistorico({ negocio_id: data.id, tipo_evento: 'criacao', descricao: 'Negócio criado' })
   return data
 }
 
 export async function atualizarNegocio(negocioId, dados) {
-  const { data, error } = await supabase
-    .from('negocios')
-    .update(dados)
-    .eq('id', negocioId)
-    .select()
-    .single()
+  let { data, error } = await supabase.from('negocios').update(dados).eq('id', negocioId).select().single()
+  if (error && erroDeColunaInexistente(error)) {
+    ;({ data, error } = await supabase.from('negocios').update(semColunasNovas(dados)).eq('id', negocioId).select().single())
+  }
   if (error) throw error
   return data
 }
 
 export async function moverEtapa(negocioId, novaEtapa, extra = {}) {
-  const { data, error } = await supabase
-    .from('negocios')
-    .update({ etapa: novaEtapa, atualizado_em: new Date().toISOString(), ...extra })
-    .eq('id', negocioId)
-    .select()
-    .single()
+  const montar = campos => supabase.from('negocios')
+    .update({ etapa: novaEtapa, atualizado_em: new Date().toISOString(), ...campos })
+    .eq('id', negocioId).select().single()
+  let { data, error } = await montar(extra)
+  if (error && erroDeColunaInexistente(error)) ({ data, error } = await montar(semColunasNovas(extra)))
   if (error) throw error
   await registrarHistorico({
     negocio_id: negocioId,
@@ -119,6 +143,56 @@ export async function moverEtapa(negocioId, novaEtapa, extra = {}) {
     dados_novos: { etapa: novaEtapa, ...extra },
   })
   return data
+}
+
+// Entrar em "Orçamento enviado": número, valor e próxima ação com data, tudo no mesmo salvamento.
+// O retorno combinado (origem 'manual') vale mais que o lembrete automático da cadência.
+export async function moverParaOrcamento(negocioId, { numero_orcamento, valor_cotacao, proxima_acao, proxima_acao_data, data_orcamento, temperatura }) {
+  return moverEtapa(negocioId, 'orcamento_enviado', {
+    numero_orcamento: String(numero_orcamento).trim(),
+    valor_cotacao: Number(valor_cotacao),
+    data_orcamento: data_orcamento || new Date().toISOString().slice(0, 10),
+    proxima_acao,
+    proxima_acao_data,
+    proxima_acao_origem: 'manual',
+    ...(temperatura ? { temperatura } : {}),
+  })
+}
+
+// Registrar contato + próxima ação em UMA operação (função do banco, transação única).
+export async function registrarContatoEAgendar({ negocio_id, canal, resultado, descricao, proxima_acao, proxima_acao_data }) {
+  const { data, error } = await supabase.rpc('registrar_contato_e_agendar', {
+    p_negocio_id: negocio_id,
+    p_canal: canal,
+    p_resultado: resultado,
+    p_descricao: descricao,
+    p_proxima_acao: proxima_acao,
+    p_proxima_acao_data: proxima_acao_data,
+  })
+  if (error) {
+    if (/registrar_contato_e_agendar/.test(error.message || '') && /not find|does not exist/i.test(error.message || '')) {
+      throw new Error('Falta rodar o SQL "melhorias-fluxo-comercial.sql" no Supabase.')
+    }
+    throw error
+  }
+  return data
+}
+
+// Todas as transições de etapa (paginado: o Supabase devolve no máximo 1000 linhas por consulta).
+export async function listarTransicoesEtapa() {
+  const todas = []
+  const tamanho = 1000
+  for (let inicio = 0; ; inicio += tamanho) {
+    const { data, error } = await supabase
+      .from('etapa_transicoes')
+      .select('negocio_id, etapa_anterior, etapa_nova, eh_entrada, ocorrido_em')
+      .order('ocorrido_em', { ascending: true })
+      .range(inicio, inicio + tamanho - 1)
+    if (error) { console.error('Erro ao listar transições:', error); return null } // null = histórico indisponível
+    todas.push(...data)
+    if (data.length < tamanho) break
+  }
+  return todas
 }
 
 export async function registrarInteracao({ negocio_id, tipo, resultado, observacao }) {
@@ -135,8 +209,9 @@ export async function registrarInteracao({ negocio_id, tipo, resultado, observac
 export async function gerarOrcamento(negocioId, { valor_cotacao, temperatura, numero_orcamento }) {
   const hoje = new Date().toISOString().slice(0, 10)
   const resultado = await moverEtapa(negocioId, 'orcamento_enviado', {
-    valor_cotacao, temperatura, numero_orcamento,
+    valor_cotacao, temperatura, numero_orcamento: String(numero_orcamento || '').trim() || null,
     data_orcamento: hoje,
+    proxima_acao_origem: 'sequencia',
   })
   await recalcularProximoPassoOrcamento(negocioId, hoje)
   return resultado
@@ -144,6 +219,12 @@ export async function gerarOrcamento(negocioId, { valor_cotacao, temperatura, nu
 
 export async function recalcularProximoPassoOrcamento(negocioId, dataOrcamento) {
   if (!dataOrcamento) return null
+
+  // O retorno combinado com o cliente prevalece sobre o lembrete automático (sem tarefa duplicada).
+  const { data: atual } = await supabase
+    .from('negocios').select('*').eq('id', negocioId).maybeSingle()
+  if (cadenciaDevePular(atual)) return { pulado: true }
+
   const config = await listarConfiguracoesAutomacao()
   const base = new Date(dataOrcamento + 'T00:00:00')
   const agora = new Date()
@@ -166,6 +247,7 @@ export async function recalcularProximoPassoOrcamento(negocioId, dataOrcamento) 
   await atualizarNegocio(negocioId, {
     proxima_acao: passoEscolhido.proxima_acao,
     proxima_acao_data: dataEscolhida.toISOString(),
+    proxima_acao_origem: 'sequencia',
   })
   await registrarHistorico({
     negocio_id: negocioId,
@@ -212,8 +294,14 @@ export async function marcarPerdida(negocioId, { motivo_perda_id, observacoes, c
   })
 }
 
-export async function marcarGanha(negocioId, { valor_final, desconto_valor, status_faturamento }) {
-  return moverEtapa(negocioId, 'ganha', { valor_final, desconto_valor, status_faturamento })
+// Marcar como Ganha já deixa o negócio no Provisionado: o Provisionado lê os próprios negócios Ganhos,
+// então não existe um segundo registro para duplicar. A previsão de faturamento mora no mesmo negócio;
+// repetir ou salvar de novo só atualiza essa mesma linha.
+export async function marcarGanha(negocioId, { valor_final, desconto_valor, status_faturamento, previsao_faturamento }) {
+  return moverEtapa(negocioId, 'ganha', {
+    valor_final, desconto_valor, status_faturamento,
+    previsao_faturamento: status_faturamento === 'faturado' ? null : (previsao_faturamento || null),
+  })
 }
 
 export async function criarPassagemBastao(dados) {
@@ -806,4 +894,72 @@ export async function gerarUrlDocumentoContrato(caminho) {
 export async function removerDocumentoContrato(caminho) {
   const { error } = await supabase.storage.from(BUCKET_DOCS_CONTRATO).remove([caminho])
   if (error) throw error
+}
+
+// ---------- Ficha do cliente ----------
+export async function listarUnidadesCliente(clienteId) {
+  const { data, error } = await supabase.from('cliente_unidades').select('*').eq('cliente_id', clienteId).order('nome')
+  if (error) { console.error('Erro ao listar unidades:', error); return null }
+  return data
+}
+
+export async function criarUnidadeCliente(dados) {
+  const { data, error } = await supabase.from('cliente_unidades').insert(dados).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function excluirUnidadeCliente(id) {
+  const { error } = await supabase.from('cliente_unidades').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listarEquipamentosCliente(clienteId) {
+  const { data, error } = await supabase.from('cliente_equipamentos').select('*').eq('cliente_id', clienteId).order('modelo')
+  if (error) { console.error('Erro ao listar equipamentos:', error); return null }
+  return data
+}
+
+export async function criarEquipamentoCliente(dados) {
+  const { data, error } = await supabase.from('cliente_equipamentos').insert(dados).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function excluirEquipamentoCliente(id) {
+  const { error } = await supabase.from('cliente_equipamentos').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listarNegociosDoCliente(clienteId) {
+  const { data, error } = await supabase
+    .from('negocios')
+    .select('id, etapa, titulo, produto_servico, valor_cotacao, valor_final, numero_orcamento, proxima_acao, proxima_acao_data, criado_em, atualizado_em, consultor:consultores(nome), departamento:departamentos(nome)')
+    .eq('cliente_id', clienteId)
+    .order('criado_em', { ascending: false })
+  if (error) { console.error('Erro ao listar negócios do cliente:', error); return [] }
+  return data
+}
+
+export async function listarAtividadesDoCliente(clienteId, limite = 30) {
+  const { data: negs, error: e1 } = await supabase.from('negocios').select('id').eq('cliente_id', clienteId)
+  if (e1 || !negs?.length) return []
+  const { data, error } = await supabase
+    .from('atividades')
+    .select('id, tipo, descricao, resultado, data_hora, responsavel:consultores(nome)')
+    .in('negocio_id', negs.map(n => n.id))
+    .order('data_hora', { ascending: false })
+    .limit(limite)
+  if (error) { console.error('Erro ao listar atividades do cliente:', error); return [] }
+  return data
+}
+
+// Vínculo CONSULTIVO com PM2P: casa por nome do cliente (mesmo critério já usado no "último contato").
+export async function listarContratosDoCliente(razaoSocial) {
+  const { data, error } = await supabase
+    .from('contratos_manutencao')
+    .select('id, cliente_nome, valor_mensalidade, modelo, data_vencimento, status')
+    .ilike('cliente_nome', String(razaoSocial || '').trim())
+  if (error) { console.error('Erro ao listar contratos do cliente:', error); return [] }
+  return data
 }

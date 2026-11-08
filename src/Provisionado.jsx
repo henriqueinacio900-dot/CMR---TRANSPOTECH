@@ -3,6 +3,7 @@ import { TEMA } from './theme'
 import * as XLSX from 'xlsx'
 import { listarNegocios, listarMetasMes, listarConsultores, getMeuConsultor } from './api'
 import { formatarMoeda } from './constants'
+import { classificarProvisionado, linhasPorVendedor, valorNegocio } from './provisionadoCalc'
 
 export default function Provisionado() {
   const [negocios, setNegocios] = useState([])
@@ -43,21 +44,23 @@ export default function Provisionado() {
 
   const inicioPeriodo = new Date(dataInicio + 'T00:00:00')
   const fimPeriodo = new Date(dataFim + 'T23:59:59')
-  const ganhosMes = negociosFiltrados.filter(n => {
-    if (n.etapa !== 'ganha' || !n.atualizado_em) return false
-    const d = new Date(n.atualizado_em)
-    return d >= inicioPeriodo && d <= fimPeriodo
-  })
+  const classif = classificarProvisionado(negociosFiltrados, inicioPeriodo, fimPeriodo)
+  const { faturados, previstos, aprovadosProximoMes, ganhasProximoMes, negociacao } = classif
+  const porVendedor = linhasPorVendedor(negociosFiltrados, inicioPeriodo, fimPeriodo)
 
-  const faturados = ganhosMes.filter(n => n.status_faturamento === 'faturado')
-  const previstos = ganhosMes.filter(n => n.status_faturamento !== 'faturado')
-  const aprovadosProximoMes = negociosFiltrados.filter(n => n.etapa === 'faturamento_proximo_mes')
-  const negociacao = negociosFiltrados.filter(n => n.etapa === 'negociacao_decisao')
+  // "Próximo mês" = etapa Faturamento próximo mês (lembrete) + vendas Ganhas com previsão de faturar no mês seguinte
+  const itensProximoMes = [
+    ...aprovadosProximoMes.map(n => ({ nome: n.cliente?.razao_social, valor: valorNegocio(n) })),
+    ...ganhasProximoMes.map(n => ({
+      nome: `${n.cliente?.razao_social} (Ganha · prev. ${new Date(n.previsao_faturamento + 'T12:00:00').toLocaleDateString('pt-BR')})`,
+      valor: valorNegocio(n),
+    })),
+  ]
 
   const meta = metasFiltradas.reduce((s, m) => s + (m.valor_meta || 0), 0)
-  const totalFaturado = faturados.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
-  const totalPrevisto = previstos.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
-  const totalProximoMes = aprovadosProximoMes.reduce((s, n) => s + (n.valor_final || n.valor_cotacao || 0), 0)
+  const totalFaturado = faturados.reduce((s, n) => s + valorNegocio(n), 0)
+  const totalPrevisto = previstos.reduce((s, n) => s + valorNegocio(n), 0)
+  const totalProximoMes = itensProximoMes.reduce((s, it) => s + it.valor, 0)
   const totalPrevistoMes = totalFaturado + totalPrevisto
   const totalNegociacao = negociacao.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
   const saldoParaMeta = meta - totalPrevistoMes
@@ -74,7 +77,7 @@ export default function Provisionado() {
     faturados.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
     linhas.push([])
     linhas.push(['Aprovado próximo mês'])
-    aprovadosProximoMes.forEach(n => linhas.push([n.cliente?.razao_social, n.valor_final || n.valor_cotacao || 0]))
+    itensProximoMes.forEach(it => linhas.push([it.nome, it.valor]))
     linhas.push(['Total aprovado próximo mês', totalProximoMes])
     linhas.push([])
     linhas.push(['Orçamentos aprovados fatura no mês'])
@@ -92,6 +95,13 @@ export default function Provisionado() {
     ws['!cols'] = [{ wch: 32 }, { wch: 16 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Provisionado')
+
+    const linhasVend = [['Vendedor', 'Orçamento + Negociação', 'Próximo mês', 'Faturado', 'Previsto a faturar', 'Provisionado de fato']]
+    porVendedor.linhas.forEach(l => linhasVend.push([l.nome, l.orcamentoNegociacao, l.proximoMes, l.faturado, l.previsto, l.provisionado]))
+    linhasVend.push(['TOTAL', porVendedor.total.orcamentoNegociacao, porVendedor.total.proximoMes, porVendedor.total.faturado, porVendedor.total.previsto, porVendedor.total.provisionado])
+    const wsV = XLSX.utils.aoa_to_sheet(linhasVend)
+    wsV['!cols'] = [{ wch: 28 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }]
+    XLSX.utils.book_append_sheet(wb, wsV, 'Por vendedor')
     const dataStr = `${dataInicio}_a_${dataFim}`
     XLSX.writeFile(wb, `provisionado-${dataStr}.xlsx`)
   }
@@ -125,22 +135,24 @@ export default function Provisionado() {
         <Card label="Saldo para a meta" valor={formatarMoeda(saldoParaMeta)} cor={saldoParaMeta > 0 ? '#a32d2d' : '#3b6d11'} />
       </div>
 
+      <TabelaPorVendedor dados={porVendedor} />
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 16 }}>
         <Tabela
           titulo="Faturado no período"
-          itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
+          itens={faturados.map(n => ({ nome: n.cliente?.razao_social, valor: valorNegocio(n) }))}
           total={totalFaturado}
           totalLabel="Total faturado"
         />
         <TabelaVerdeClaro
           titulo="Aprovado próximo mês"
-          itens={aprovadosProximoMes.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
+          itens={itensProximoMes}
           total={totalProximoMes}
           totalLabel="Total aprovado próximo mês"
         />
         <Tabela
           titulo="Orçamentos aprovados fatura no mês"
-          itens={previstos.map(n => ({ nome: n.cliente?.razao_social, valor: n.valor_final || n.valor_cotacao || 0 }))}
+          itens={previstos.map(n => ({ nome: n.cliente?.razao_social, valor: valorNegocio(n) }))}
           total={totalPrevisto}
           totalLabel="Total previsto (esta lista)"
         />
@@ -153,11 +165,63 @@ export default function Provisionado() {
       </div>
 
       <p style={{ fontSize: 11, color: '#999', marginTop: 16 }}>
-        Negociação é só informativo aqui — não entra na conta do saldo pra meta. "Aprovado próximo mês" mostra os negócios que estão na etapa "Faturamento próximo mês" do pipeline — mova o card pra Ganha quando puder faturar de verdade. A Meta exibida é sempre a do mês corrente, mesmo se você escolher um período diferente acima.
+        Negociação é só informativo aqui — não entra na conta do saldo pra meta. "Aprovado próximo mês" reúne os negócios da etapa "Faturamento próximo mês" do pipeline e as vendas já Ganhas com previsão de faturar no mês seguinte — essas continuam Ganhas no comercial e só mudam de mês aqui no Provisionado. A Meta exibida é sempre a do mês corrente, mesmo se você escolher um período diferente acima.
       </p>
     </div>
   )
 }
+
+function TabelaPorVendedor({ dados }) {
+  const { linhas, total } = dados
+  const th = { padding: '8px 10px', textAlign: 'right', fontSize: 12, color: '#555', fontWeight: 700, background: '#F1E9DD' }
+  const td = { padding: '8px 10px', textAlign: 'right', fontSize: 13, borderBottom: '1px solid #f2f2f2' }
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222', marginBottom: 20, overflowX: 'auto' }}>
+      <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>Por vendedor</p>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: 'left', borderRadius: '6px 0 0 6px' }}>Vendedor</th>
+            <th style={th}>Orçamento + Negociação</th>
+            <th style={{ ...th, background: '#C7EABB', color: '#245209' }}>Próximo mês</th>
+            <th style={{ ...th, borderRadius: '0 6px 6px 0' }}>Provisionado de fato</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map(l => (
+            <tr key={l.id}>
+              <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{l.nome}</td>
+              <td style={td}>{formatarMoeda(l.orcamentoNegociacao)}<span style={subQtd}> · {l.qtdOrcNeg}</span></td>
+              <td style={{ ...td, background: '#F3FBF0', color: '#245209' }}>{formatarMoeda(l.proximoMes)}<span style={subQtd}> · {l.qtdProximoMes}</span></td>
+              <td style={td}>
+                <strong>{formatarMoeda(l.provisionado)}</strong>
+                <span style={subQtd}> faturado {formatarMoeda(l.faturado)} · a faturar {formatarMoeda(l.previsto)}</span>
+              </td>
+            </tr>
+          ))}
+          {linhas.length === 0 && (
+            <tr><td colSpan={4} style={{ ...td, textAlign: 'left', color: '#999' }}>Nenhum valor no período.</td></tr>
+          )}
+        </tbody>
+        {linhas.length > 0 && (
+          <tfoot>
+            <tr style={{ fontWeight: 700 }}>
+              <td style={{ ...td, textAlign: 'left', borderTop: '2px solid #ddd' }}>Total</td>
+              <td style={{ ...td, borderTop: '2px solid #ddd' }}>{formatarMoeda(total.orcamentoNegociacao)}</td>
+              <td style={{ ...td, borderTop: '2px solid #ddd', background: '#F3FBF0', color: '#245209' }}>{formatarMoeda(total.proximoMes)}</td>
+              <td style={{ ...td, borderTop: '2px solid #ddd' }}>{formatarMoeda(total.provisionado)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+      <p style={{ fontSize: 11, color: '#999', margin: '8px 0 0' }}>
+        Orçamento + Negociação: carteira aberta agora (valor da cotação). Próximo mês: etapa Faturamento próximo mês + Ganhas com previsão no mês seguinte. Provisionado de fato: faturado + previsto no período (mesma regra do card "Previsto + Faturado no mês").
+      </p>
+    </div>
+  )
+}
+
+const subQtd = { fontSize: 11, color: '#999', fontWeight: 400 }
 
 function Tabela({ titulo, itens, total, totalLabel }) {
   return (

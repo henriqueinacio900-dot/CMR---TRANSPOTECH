@@ -405,68 +405,87 @@ function calcularMetricas(negocios, periodo) {
   }
 }
 
-const CORES_ROSCA = { quente: '#FF5A3D', morno: TEMA.ambar, frio: TEMA.azulAnalitico }
-const LABEL_ROSCA = { quente: 'Quente', morno: 'Morno', frio: 'Frio' }
+const CORES_ROSCA = { quente: '#FF5A3D', morno: TEMA.ambar, frio: TEMA.azulAnalitico, sem: '#9AA7B8' }
+const LABEL_ROSCA = { quente: 'Quente', morno: 'Morno', frio: 'Frio', sem: 'Sem temperatura' }
+const TEMPERATURAS_VALIDAS = ['quente', 'morno', 'frio']
+const chaveTemperatura = n => (TEMPERATURAS_VALIDAS.includes(n.temperatura) ? n.temperatura : 'sem')
 
+// Tooltip próprio: cada linha na cor da temperatura (o padrão do gráfico deixava o texto escuro/ilegível).
+function TooltipTemperatura({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const d = payload[0].payload
+  const cor = CORES_ROSCA[d.chave]
+  return (
+    <div style={{ background: TEMA.cardElevado, border: `1px solid ${cor}`, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+      <p style={{ margin: 0, fontWeight: 700, color: cor }}>{d.nome}</p>
+      <p style={{ margin: '2px 0 0', color: cor }}>{d.qtd} negócio(s) · {d.pct.toFixed(1)}%</p>
+      <p style={{ margin: '2px 0 0', color: cor }}>{formatarMoeda(d.valor)}</p>
+    </div>
+  )
+}
+
+// Base: todos os negócios hoje em Negociação/decisão (a mesma lista da coluna do pipeline aberto,
+// já filtrada por departamento e vendedor). A data de 1º contato não entra aqui.
 function GraficoTemperatura({ filtrados }) {
   const [tempAberta, setTempAberta] = useState(null)
   const emNegociacao = filtrados.filter(n => n.etapa === 'negociacao_decisao')
-  const dados = ['quente', 'morno', 'frio']
-    .map(t => ({
-      nome: LABEL_ROSCA[t], chave: t,
-      valor: emNegociacao.filter(n => n.temperatura === t).reduce((s, n) => s + (n.valor_cotacao || 0), 0),
-      qtd: emNegociacao.filter(n => n.temperatura === t).length,
-    }))
   const totalNegocios = emNegociacao.length
+  const chaves = [...TEMPERATURAS_VALIDAS, 'sem']
+  const todos = chaves.map(t => {
+    const itens = emNegociacao.filter(n => chaveTemperatura(n) === t)
+    return {
+      nome: LABEL_ROSCA[t], chave: t, qtd: itens.length,
+      valor: itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0),
+      pct: totalNegocios > 0 ? (itens.length / totalNegocios) * 100 : 0,
+    }
+  })
+  // Quente/Morno/Frio aparecem sempre; "Sem temperatura" só quando existir.
+  const legenda = todos.filter(d => d.chave !== 'sem' || d.qtd > 0)
+  const fatias = todos.filter(d => d.qtd > 0)
 
   return (
     <div className="tp-card" style={{ ...cardBase, flex: '1 0 280px' }}>
       <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 8px', color: TEMA.textoPrincipal }}>Temperatura das negociações</p>
-      {totalNegocios === 0 ? (
-        <p style={{ fontSize: 12, color: TEMA.textoDiscreto }}>Nenhum negócio em negociação agora.</p>
-      ) : (
-        <>
-          <div style={{ position: 'relative', filter: 'drop-shadow(0 0 10px rgba(255,90,61,0.15))' }}>
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={dados.filter(d => d.qtd > 0)} dataKey="valor" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={3}
-                  onClick={d => setTempAberta(d.chave)}
-                  style={{ cursor: 'pointer' }}
-                  stroke={TEMA.fundoSecundario}
-                  strokeWidth={2}
-                >
-                  {dados.filter(d => d.qtd > 0).map(d => <Cell key={d.chave} fill={CORES_ROSCA[d.chave]} />)}
-                </Pie>
-                <Tooltip
-                  formatter={(valor, nome, item) => [`${formatarMoeda(valor)} · ${item.payload.qtd} negócio(s)`, nome]}
-                  contentStyle={{ background: TEMA.cardElevado, border: `1px solid ${TEMA.borda}`, borderRadius: 8, color: TEMA.textoPrincipal }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 30,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-            }}>
-              <p style={{ fontSize: 24, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>{totalNegocios}</p>
-              <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: 0 }}>negócios</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: 11, color: TEMA.textoSecundario, marginTop: 4 }}>
-            {dados.map(d => (
-              <span key={d.chave} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block', boxShadow: `0 0 5px ${CORES_ROSCA[d.chave]}` }} />
-                {d.nome} ({d.qtd})
-              </span>
-            ))}
-          </div>
-        </>
-      )}
+      <div style={{ position: 'relative', filter: 'drop-shadow(0 0 10px rgba(255,90,61,0.15))' }}>
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie
+              data={totalNegocios === 0 ? [{ nome: '', chave: 'sem', qtd: 1, valor: 0, pct: 0 }] : fatias}
+              dataKey="qtd" nameKey="nome" innerRadius={45} outerRadius={70} paddingAngle={totalNegocios === 0 ? 0 : 3}
+              onClick={d => { if (totalNegocios > 0) setTempAberta(d.chave) }}
+              style={{ cursor: totalNegocios > 0 ? 'pointer' : 'default' }}
+              stroke={TEMA.fundoSecundario}
+              strokeWidth={2}
+              isAnimationActive={false}
+            >
+              {(totalNegocios === 0 ? [{ chave: 'vazio' }] : fatias).map(d => (
+                <Cell key={d.chave} fill={d.chave === 'vazio' ? 'rgba(255,255,255,0.08)' : CORES_ROSCA[d.chave]} />
+              ))}
+            </Pie>
+            {totalNegocios > 0 && <Tooltip content={<TooltipTemperatura />} />}
+          </PieChart>
+        </ResponsiveContainer>
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 30,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+        }}>
+          <p style={{ fontSize: 24, fontWeight: 700, margin: 0, color: TEMA.textoPrincipal }}>{totalNegocios}</p>
+          <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: 0 }}>{totalNegocios === 1 ? 'negócio' : 'negócios'}</p>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '4px 14px', fontSize: 11, color: TEMA.textoSecundario, marginTop: 4 }}>
+        {legenda.map(d => (
+          <span key={d.chave} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: CORES_ROSCA[d.chave], display: 'inline-block', boxShadow: `0 0 5px ${CORES_ROSCA[d.chave]}` }} />
+            {d.nome}: {d.qtd} ({d.pct.toFixed(0)}%)
+          </span>
+        ))}
+      </div>
 
       {tempAberta && (
         <ModalListaTemperatura
           temperatura={tempAberta}
-          negocios={emNegociacao.filter(n => n.temperatura === tempAberta)}
+          negocios={emNegociacao.filter(n => chaveTemperatura(n) === tempAberta)}
           onFechar={() => setTempAberta(null)}
         />
       )}
@@ -483,7 +502,7 @@ function ModalListaTemperatura({ temperatura, negocios, onFechar }) {
       <div style={{ background: '#fff', borderRadius: 12, width: 560, maxWidth: '100%', maxHeight: '85vh', overflowY: 'auto', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <p style={{ fontWeight: 700, fontSize: 15, margin: 0, color: CORES_ROSCA[temperatura] }}>
-            Negócios — temperatura {LABEL_ROSCA[temperatura]}
+            {temperatura === 'sem' ? 'Negócios — sem temperatura' : `Negócios — temperatura ${LABEL_ROSCA[temperatura]}`}
           </p>
           <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' }}>✕</button>
         </div>
@@ -806,11 +825,11 @@ function VisaoGeral(props) {
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <PipelinePorEtapa filtrados={filtradosPeriodo} />
-        <GraficoTemperatura filtrados={filtradosPeriodo} />
+        <GraficoTemperatura filtrados={filtrados} />
         <TopVendedores filtrados={filtradosPeriodo} />
       </div>
       <p style={{ fontSize: 11, color: TEMA.textoDiscreto, margin: '-14px 0 20px' }}>
-        Ganha/Perdida acima consideram a data de fechamento; as demais etapas consideram a Data 1º contato — tudo dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O quadro abaixo mostra tudo que está aberto agora, sem filtro de período.
+        Ganha/Perdida acima consideram a data de fechamento; as demais etapas consideram a Data 1º contato — tudo dentro do período selecionado ({filtradosPeriodo.length} negócio{filtradosPeriodo.length !== 1 ? 's' : ''}). O gráfico de Temperatura mostra todas as negociações abertas agora (sem filtro de período), como a coluna Negociação/decisão do quadro abaixo, que também mostra tudo que está aberto.
       </p>
 
       <GraficoCrescimentoDiario filtradosPeriodo={filtrados} periodo={periodo} />

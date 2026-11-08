@@ -297,7 +297,24 @@ export async function marcarPerdida(negocioId, { motivo_perda_id, observacoes, c
 // Marcar como Ganha já deixa o negócio no Provisionado: o Provisionado lê os próprios negócios Ganhos,
 // então não existe um segundo registro para duplicar. A previsão de faturamento mora no mesmo negócio;
 // repetir ou salvar de novo só atualiza essa mesma linha.
-export async function marcarGanha(negocioId, { valor_final, desconto_valor, status_faturamento, previsao_faturamento }) {
+// Guarda no histórico do negócio o desconto concedido (valor de cotação, valor fechado, R$ e %).
+export async function registrarDescontoNoHistorico(negocioId, valorCotacao, valorFinal) {
+  const cot = Number(valorCotacao) || 0
+  const fin = Number(valorFinal) || 0
+  const desconto = Math.round((cot - fin) * 100) / 100
+  if (!(desconto > 0) || !(cot > 0)) return
+  const pct = (desconto / cot) * 100
+  const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  await registrarHistorico({
+    negocio_id: negocioId,
+    tipo_evento: 'desconto_concedido',
+    descricao: `Desconto concedido: ${brl(desconto)} (${pct.toFixed(1).replace('.', ',')}%) — cotação ${brl(cot)}, valor fechado ${brl(fin)}`,
+    dados_novos: { valor_cotacao: cot, valor_final: fin, desconto_valor: desconto, desconto_percentual: Number(pct.toFixed(2)) },
+  })
+}
+
+export async function marcarGanha(negocioId, { valor_final, desconto_valor, status_faturamento, previsao_faturamento, valor_cotacao }) {
+  if (valor_cotacao != null) await registrarDescontoNoHistorico(negocioId, valor_cotacao, valor_final)
   return moverEtapa(negocioId, 'ganha', {
     valor_final, desconto_valor, status_faturamento,
     previsao_faturamento: status_faturamento === 'faturado' ? null : (previsao_faturamento || null),

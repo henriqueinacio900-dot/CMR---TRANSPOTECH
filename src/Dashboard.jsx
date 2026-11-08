@@ -225,6 +225,10 @@ export default function Dashboard() {
         </div>
       </Secao>
 
+      <Secao titulo="Desconto concedido">
+        <PainelDesconto negocios={negocios} />
+      </Secao>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: TEMA.textoSecundario }}>Período da taxa de ganho e das tabelas de conversão:</span>
         <select value={periodoTaxa} onChange={e => setPeriodoTaxa(e.target.value)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, background: '#fff', color: '#222' }}>
@@ -243,10 +247,6 @@ export default function Dashboard() {
 
       <Secao titulo="Conversão por departamento">
         <TabelaConversao dados={porDepartamento} />
-      </Secao>
-
-      <Secao titulo="Desconto concedido no mês (por vendedor e departamento)">
-        <PainelDesconto negocios={negocios} />
       </Secao>
 
       <Secao titulo="Metas do mês (por consultor)">
@@ -277,58 +277,128 @@ export default function Dashboard() {
   )
 }
 
-function PainelDesconto({ negocios }) {
-  const agora = new Date()
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1)
-  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes && new Date(n.atualizado_em) < fimMes)
+const PERIODOS_DESCONTO = [
+  { key: 'este_mes', label: 'Este mês' },
+  { key: 'mes_passado', label: 'Mês passado' },
+  { key: 'ultimos_3_meses', label: 'Últimos 3 meses' },
+  { key: 'este_ano', label: 'Este ano' },
+  { key: 'tudo', label: 'Todo o período (acumulado)' },
+]
 
-  const totalDesconto = ganhosMes.reduce((s, n) => s + (n.desconto_valor || 0), 0)
+function faixaDesconto(chave) {
+  const a = new Date()
+  if (chave === 'mes_passado') return { inicio: new Date(a.getFullYear(), a.getMonth() - 1, 1), fim: new Date(a.getFullYear(), a.getMonth(), 1) }
+  if (chave === 'ultimos_3_meses') return { inicio: new Date(a.getFullYear(), a.getMonth() - 2, 1), fim: new Date(a.getFullYear(), a.getMonth() + 1, 1) }
+  if (chave === 'este_ano') return { inicio: new Date(a.getFullYear(), 0, 1), fim: new Date(a.getFullYear() + 1, 0, 1) }
+  if (chave === 'tudo') return { inicio: new Date(2000, 0, 1), fim: new Date(2100, 0, 1) }
+  return { inicio: new Date(a.getFullYear(), a.getMonth(), 1), fim: new Date(a.getFullYear(), a.getMonth() + 1, 1) }
+}
+
+// Desconto = valor de cotação − valor fechado das vendas Ganhas (data de fechamento dentro do período).
+// O percentual é sempre desconto ÷ valor de cotação (valor de tabela).
+function resumirDesconto(ganhas) {
+  const bruto = ganhas.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+  const desconto = ganhas.reduce((s, n) => s + (n.desconto_valor || 0), 0)
+  const comDesconto = ganhas.filter(n => (n.desconto_valor || 0) > 0).length
+  return { vendas: ganhas.length, comDesconto, bruto, desconto, fechado: bruto - desconto, pct: bruto > 0 ? desconto / bruto * 100 : 0 }
+}
+
+function PainelDesconto({ negocios }) {
+  const [periodo, setPeriodo] = useState('este_mes')
+  const todasGanhas = negocios.filter(n => n.etapa === 'ganha')
+  const noPeriodo = chave => {
+    const { inicio, fim } = faixaDesconto(chave)
+    return todasGanhas.filter(n => { const d = new Date(n.atualizado_em); return d >= inicio && d < fim })
+  }
+  const ganhas = noPeriodo(periodo)
+  const resumo = resumirDesconto(ganhas)
+  const doMes = resumirDesconto(noPeriodo('este_mes'))
+  const acumulado = resumirDesconto(todasGanhas)
 
   function agruparDesconto(chaveFn) {
     const mapa = {}
-    ganhosMes.forEach(n => {
+    ganhas.forEach(n => {
       const chave = chaveFn(n)
-      if (!mapa[chave]) mapa[chave] = { desconto: 0, vendas: 0, valorBruto: 0 }
-      mapa[chave].desconto += (n.desconto_valor || 0)
-      mapa[chave].vendas++
-      mapa[chave].valorBruto += (n.valor_cotacao || 0)
+      if (!mapa[chave]) mapa[chave] = []
+      mapa[chave].push(n)
     })
     return Object.entries(mapa)
-      .map(([nome, v]) => ({ nome, ...v, percentual: v.valorBruto > 0 ? (v.desconto / v.valorBruto * 100) : 0 }))
+      .map(([nome, lista]) => ({ nome, ...resumirDesconto(lista) }))
       .sort((a, b) => b.desconto - a.desconto)
   }
-
   const porVendedor = agruparDesconto(n => n.consultor?.nome || 'Sem consultor')
   const porDepartamento = agruparDesconto(n => n.departamento?.nome || 'Sem departamento')
+  const rotulo = PERIODOS_DESCONTO.find(p => p.key === periodo)?.label.toLowerCase()
 
   return (
     <div>
-      <p style={{ fontSize: 13, margin: '0 0 12px' }}>
-        Total de desconto dado esse mês: <strong style={{ color: '#a32d2d' }}>{formatarMoeda(totalDesconto)}</strong>
-      </p>
-      <p style={{ fontSize: 11, color: '#999', margin: '-6px 0 12px' }}>
-        Em R$ e em % do valor de cotação das vendas ganhas no mês. O vendedor informa só o valor fechado; o desconto é calculado pelo sistema.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
-        <TabelaDesconto titulo="Por vendedor" dados={porVendedor} />
-        <TabelaDesconto titulo="Por departamento" dados={porDepartamento} />
+      <div style={grid4}>
+        <Card label="Desconto dado este mês" valor={formatarMoeda(doMes.desconto)} cor="#a32d2d" />
+        <Card label="Desconto acumulado (desde o início)" valor={formatarMoeda(acumulado.desconto)} cor="#a32d2d" />
+        <Card label="% médio este mês" valor={`${doMes.pct.toFixed(1)}%`} />
+        <Card label="% médio acumulado" valor={`${acumulado.pct.toFixed(1)}%`} />
       </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 10px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: TEMA.textoSecundario }}>Detalhe por vendedor e departamento — período:</span>
+        <select value={periodo} onChange={e => setPeriodo(e.target.value)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, background: '#fff', color: '#222' }}>
+          {PERIODOS_DESCONTO.map(p => <option key={p.key} value={p.key} style={{ color: '#222' }}>{p.label}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: TEMA.textoDiscreto }}>
+          {resumo.vendas} venda{resumo.vendas !== 1 ? 's' : ''} em {rotulo}, {resumo.comDesconto} com desconto. % = desconto ÷ valor de cotação.
+        </span>
+      </div>
+
+      <TabelaDesconto titulo="Por vendedor" dados={porVendedor} total={resumo} />
+      <div style={{ height: 12 }} />
+      <TabelaDesconto titulo="Por departamento" dados={porDepartamento} total={resumo} />
     </div>
   )
 }
 
-function TabelaDesconto({ titulo, dados }) {
+function TabelaDesconto({ titulo, dados, total }) {
+  const th = { padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#777', fontSize: 12 }
+  const td = { padding: '6px 8px', textAlign: 'right', fontSize: 12 }
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222' }}>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 10, padding: 14, color: '#222', overflowX: 'auto' }}>
       <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>{titulo}</p>
-      {dados.length === 0 && <p style={{ fontSize: 12, color: '#999' }}>Sem vendas ganhas esse mês ainda.</p>}
-      {dados.map(d => (
-        <div key={d.nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid #f2f2f2' }}>
-          <span>{d.nome} ({d.vendas} venda{d.vendas !== 1 ? 's' : ''})</span>
-          <span style={{ fontWeight: 600, color: '#a32d2d' }}>{formatarMoeda(d.desconto)} ({d.percentual.toFixed(1)}%)</span>
-        </div>
-      ))}
+      {dados.length === 0 ? <p style={{ fontSize: 12, color: '#999', margin: 0 }}>Sem vendas ganhas no período.</p> : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #eee' }}>
+              <th style={{ ...th, textAlign: 'left' }}>{titulo.replace('Por ', '')}</th>
+              <th style={th}>Vendas</th>
+              <th style={th}>Com desconto</th>
+              <th style={th}>Valor de cotação</th>
+              <th style={th}>Desconto (R$)</th>
+              <th style={th}>Desconto (%)</th>
+              <th style={th}>Valor fechado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.map(d => (
+              <tr key={d.nome} style={{ borderBottom: '1px solid #f2f2f2' }}>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{d.nome}</td>
+                <td style={td}>{d.vendas}</td>
+                <td style={td}>{d.comDesconto}</td>
+                <td style={td}>{formatarMoeda(d.bruto)}</td>
+                <td style={{ ...td, fontWeight: 700, color: d.desconto > 0 ? '#a32d2d' : '#222' }}>{formatarMoeda(d.desconto)}</td>
+                <td style={{ ...td, fontWeight: 700, color: d.desconto > 0 ? '#a32d2d' : '#222' }}>{d.pct.toFixed(1)}%</td>
+                <td style={td}>{formatarMoeda(d.fechado)}</td>
+              </tr>
+            ))}
+            <tr style={{ background: '#fafafa' }}>
+              <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>Total</td>
+              <td style={{ ...td, fontWeight: 700 }}>{total.vendas}</td>
+              <td style={{ ...td, fontWeight: 700 }}>{total.comDesconto}</td>
+              <td style={{ ...td, fontWeight: 700 }}>{formatarMoeda(total.bruto)}</td>
+              <td style={{ ...td, fontWeight: 700, color: '#a32d2d' }}>{formatarMoeda(total.desconto)}</td>
+              <td style={{ ...td, fontWeight: 700, color: '#a32d2d' }}>{total.pct.toFixed(1)}%</td>
+              <td style={{ ...td, fontWeight: 700 }}>{formatarMoeda(total.fechado)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

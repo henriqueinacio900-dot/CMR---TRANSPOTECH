@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
-  listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha,
+  listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha, registrarDescontoNoHistorico,
   recalcularProximoPassoOrcamento, excluirNegocio, moverParaOrcamento,
 } from './api'
 import {
@@ -175,6 +175,7 @@ function EditarGanha({ negocio, onAtualizado }) {
     try {
       const desconto = Math.round((cotacao - valorFinal) * 100) / 100
       await atualizarNegocio(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: status })
+      if (valorFinal !== (negocio.valor_final ?? cotacao)) await registrarDescontoNoHistorico(negocio.id, cotacao, valorFinal)
       onAtualizado()
       setEditando(false)
     } finally {
@@ -699,7 +700,7 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     setSalvando(true)
     try {
       const desconto = Math.round((cotacao - valorFinal) * 100) / 100
-      await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
+      await marcarGanha(negocio.id, { valor_cotacao: cotacao, valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
       onAtualizado()
       onFechar()
     } finally {

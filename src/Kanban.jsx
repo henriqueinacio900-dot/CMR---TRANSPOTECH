@@ -984,7 +984,8 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
           let itens = filtrados.filter(n => n.etapa === col.key)
           if (col.key === 'ganha') itens = itens.filter(n => dentroDoPeriodo(n.atualizado_em))
           if (col.key === 'perdida') itens = itens.filter(n => dentroDoPeriodo(n.data_perda))
-          const totalCol = itens.reduce((s, n) => s + (n.valor_cotacao || 0), 0)
+          // Ganha mostra o valor final (já com desconto); as demais etapas, o valor da cotação
+          const totalCol = itens.reduce((s, n) => s + (col.key === 'ganha' ? (n.valor_final || n.valor_cotacao || 0) : (n.valor_cotacao || 0)), 0)
           return (
             <div key={col.key} style={{ minWidth: 200, flex: '1 0 200px' }}>
               <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #eee', borderRadius: 8, marginBottom: 8 }}>
@@ -1080,7 +1081,7 @@ function CardNegocio({ negocio, onClick }) {
         <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>Orçamento: {negocio.numero_orcamento}</p>
       )}
       <p style={{ fontSize: 13, margin: '4px 0 0', fontWeight: 600, color: temp ? temp.titulo : '#222' }}>
-        {formatarMoeda(negocio.valor_cotacao)}
+        {formatarMoeda(negocio.etapa === 'ganha' ? (negocio.valor_final || negocio.valor_cotacao) : negocio.valor_cotacao)}
       </p>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
         <p style={{ fontSize: 11, margin: 0, color: temp ? temp.sub : '#777' }}>{negocio.consultor?.nome}</p>

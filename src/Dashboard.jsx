@@ -280,7 +280,8 @@ export default function Dashboard() {
 function PainelDesconto({ negocios }) {
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes)
+  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1)
+  const ganhosMes = negocios.filter(n => n.etapa === 'ganha' && new Date(n.atualizado_em) >= inicioMes && new Date(n.atualizado_em) < fimMes)
 
   const totalDesconto = ganhosMes.reduce((s, n) => s + (n.desconto_valor || 0), 0)
 
@@ -305,6 +306,9 @@ function PainelDesconto({ negocios }) {
     <div>
       <p style={{ fontSize: 13, margin: '0 0 12px' }}>
         Total de desconto dado esse mês: <strong style={{ color: '#a32d2d' }}>{formatarMoeda(totalDesconto)}</strong>
+      </p>
+      <p style={{ fontSize: 11, color: '#999', margin: '-6px 0 12px' }}>
+        Em R$ e em % do valor de cotação das vendas ganhas no mês. O vendedor informa só o valor fechado; o desconto é calculado pelo sistema.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 16 }}>
         <TabelaDesconto titulo="Por vendedor" dados={porVendedor} />

@@ -160,15 +160,20 @@ function AbaResumo({ negocio, onAtualizado }) {
 
 function EditarGanha({ negocio, onAtualizado }) {
   const [editando, setEditando] = useState(false)
-  const [pct, setPct] = useState('')
+  const [valorNovo, setValorNovo] = useState(String(negocio.valor_final ?? negocio.valor_cotacao ?? ''))
+  const [erroVal, setErroVal] = useState('')
   const [status, setStatus] = useState(negocio.status_faturamento || 'previsto')
   const [salvando, setSalvando] = useState(false)
 
   async function salvar() {
+    const cotacao = negocio.valor_cotacao || 0
+    const valorFinal = Number(valorNovo)
+    if (!valorNovo || !(valorFinal > 0)) { setErroVal('Informe o valor fechado da venda.'); return }
+    if (valorFinal > cotacao) { setErroVal('O valor fechado não pode ser maior que o da cotação.'); return }
+    setErroVal('')
     setSalvando(true)
     try {
-      const desconto = (negocio.valor_cotacao || 0) * (Number(pct || 0) / 100)
-      const valorFinal = (negocio.valor_cotacao || 0) - desconto
+      const desconto = Math.round((cotacao - valorFinal) * 100) / 100
       await atualizarNegocio(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: status })
       onAtualizado()
       setEditando(false)
@@ -234,10 +239,13 @@ function EditarGanha({ negocio, onAtualizado }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-      <input type="number" placeholder="Novo desconto (%)" value={pct} onChange={e => setPct(e.target.value)} style={inputStyle} />
-      <p style={{ fontSize: 12, margin: 0, color: '#3b6d11' }}>
-        Novo valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(pct || 0) / 100))}
-      </p>
+      <input type="number" step="0.01" min="0" placeholder="Valor fechado (R$)" value={valorNovo} onChange={e => setValorNovo(e.target.value)} style={inputStyle} />
+      {erroVal && <p style={{ fontSize: 12, color: '#a32d2d', margin: 0 }}>{erroVal}</p>}
+      {Number(valorNovo) > 0 && Number(valorNovo) <= (negocio.valor_cotacao || 0) && (
+        <p style={{ fontSize: 12, margin: 0, color: '#666' }}>
+          Desconto concedido: {formatarMoeda((negocio.valor_cotacao || 0) - Number(valorNovo))}
+        </p>
+      )}
       <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
         <option value="previsto">Previsto no mês</option>
         <option value="faturado">Faturado</option>
@@ -558,7 +566,8 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
   const [motivoId, setMotivoId] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [concorrente, setConcorrente] = useState('')
-  const [descontoPercentual, setDescontoPercentual] = useState('')
+  const [valorFechado, setValorFechado] = useState(negocio.valor_cotacao != null ? String(negocio.valor_cotacao) : '') // o vendedor digita só o valor fechado; o desconto o sistema calcula
+  const [erroValor, setErroValor] = useState('')
   const [statusFaturamento, setStatusFaturamento] = useState('previsto')
   const [proximaAcaoNova, setProximaAcaoNova] = useState('')
   const [proximaAcaoDataNova, setProximaAcaoDataNova] = useState('')
@@ -682,11 +691,14 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     const v = validarGanha({ status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
     setErrosGanha(v)
     if (temErros(v)) return
+    const valorFinal = Number(valorFechado)
+    const cotacao = negocio.valor_cotacao || 0
+    if (!valorFechado || !(valorFinal > 0)) { setErroValor('Informe o valor fechado da venda.'); return }
+    if (valorFinal > cotacao) { setErroValor('O valor fechado não pode ser maior que o da cotação. Se o valor mudou, ajuste a cotação antes.'); return }
+    setErroValor('')
     setSalvando(true)
     try {
-      const pct = Number(descontoPercentual || 0)
-      const desconto = (negocio.valor_cotacao || 0) * (pct / 100)
-      const valorFinal = (negocio.valor_cotacao || 0) - desconto
+      const desconto = Math.round((cotacao - valorFinal) * 100) / 100
       await marcarGanha(negocio.id, { valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
       onAtualizado()
       onFechar()
@@ -768,10 +780,14 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <p style={{ fontWeight: 600, fontSize: 13, margin: 0 }}>Marcar como ganha</p>
           <p style={{ fontSize: 12, color: '#777', margin: 0 }}>Valor da cotação: {formatarMoeda(negocio.valor_cotacao)}</p>
-          <input type="number" placeholder="Desconto concedido (%)" value={descontoPercentual} onChange={e => setDescontoPercentual(e.target.value)} style={inputStyle} />
-          <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#3b6d11' }}>
-            Valor final: {formatarMoeda((negocio.valor_cotacao || 0) * (1 - Number(descontoPercentual || 0) / 100))}
-          </p>
+          <label style={{ fontSize: 12, color: '#666', display: 'block' }}>Valor fechado da venda (R$) *</label>
+          <input type="number" step="0.01" min="0" placeholder="Valor fechado (R$)" value={valorFechado} onChange={e => setValorFechado(e.target.value)} style={inputStyle} />
+          {erroValor && <p style={{ fontSize: 12, color: '#a32d2d', margin: 0 }}>{erroValor}</p>}
+          {Number(valorFechado) > 0 && Number(valorFechado) <= (negocio.valor_cotacao || 0) && (
+            <p style={{ fontSize: 12, margin: 0, color: '#666' }}>
+              Desconto concedido: {formatarMoeda((negocio.valor_cotacao || 0) - Number(valorFechado))}
+            </p>
+          )}
           <label style={{ fontSize: 12, color: '#666', display: 'block', marginTop: 4 }}>Esse valor já foi faturado ou ainda é previsão pro mês?</label>
           <select value={statusFaturamento} onChange={e => setStatusFaturamento(e.target.value)} style={inputStyle}>
             <option value="previsto">Previsto no mês (aprovado, ainda vai faturar)</option>

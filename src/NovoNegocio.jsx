@@ -123,12 +123,12 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
 
     if (!departamentoId) { setErro('Escolha o departamento da oportunidade.'); return }
 
-    const ehOrcamento = emAndamento && etapaInicial === 'orcamento_enviado'
-    const ehNegociacao = emAndamento && etapaInicial === 'negociacao_decisao'
+    const ehOrcamento = etapaInicial === 'orcamento_enviado'
+    const ehNegociacao = etapaInicial === 'negociacao_decisao'
     const ehGanha = etapaInicial === 'ganha'
 
     // Mesma validação de "Orçamento enviado" da mudança de etapa: número, valor e próxima ação com data.
-    if (ehOrcamento) {
+    if (ehOrcamento || ehNegociacao) {
       const v = validarOrcamento(orc)
       setErrosOrc(v)
       if (temErros(v)) { setErro('Complete os campos do orçamento.'); return }
@@ -138,11 +138,6 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
       const v = validarGanha({ status_faturamento: statusFat, previsao_faturamento: previsaoFat })
       if (temErros(v)) { setErro(v.previsao_faturamento); return }
     }
-    if (ehNegociacao && (!valorCotacao || !proximaAcao || !proximaAcaoData)) {
-      setErro('Em Negociação/decisão informe o valor, a próxima ação e a data.')
-      return
-    }
-
     setSalvando(true)
     try {
       let clienteId
@@ -170,17 +165,18 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
         })
       }
 
-      const acao = ehGanha ? null : (ehOrcamento ? orc.proxima_acao : proximaAcao)
-      const acaoData = ehGanha ? null : (ehOrcamento ? orc.proxima_acao_data : proximaAcaoData)
+      const comOrc = ehOrcamento || ehNegociacao
+      const acao = ehGanha ? null : (comOrc ? orc.proxima_acao : proximaAcao)
+      const acaoData = ehGanha ? null : (comOrc ? orc.proxima_acao_data : proximaAcaoData)
       await criarNegocio({
         cliente_id: clienteId,
         departamento_id: departamentoId,
         etapa: etapaInicial,
         titulo: razaoSocial,
         origem: origem || null,
-        valor_cotacao: ehOrcamento ? Number(orc.valor_cotacao) : (valorCotacao ? Number(valorCotacao) : null),
-        numero_orcamento: ehOrcamento ? orc.numero_orcamento.trim() : null,
-        temperatura: etapaInicial === 'negociacao_decisao' ? temperatura : null,
+        valor_cotacao: comOrc ? Number(orc.valor_cotacao) : (valorCotacao ? Number(valorCotacao) : null),
+        numero_orcamento: comOrc ? orc.numero_orcamento.trim() : null,
+        temperatura: comOrc ? temperatura : null,
         ...(ehGanha ? {
           valor_final: Number(valorCotacao),
           desconto_valor: 0,
@@ -308,10 +304,19 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
             </select>
           </Campo>
 
-          {emAndamento && etapaInicial === 'orcamento_enviado' && (
+          {(etapaInicial === 'orcamento_enviado' || etapaInicial === 'negociacao_decisao') && (
             <div style={{ marginBottom: 10, padding: 10, background: '#FFF8F0', border: '1px solid #F0C89A', borderRadius: 8 }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#8a4b00', margin: '0 0 8px' }}>Orçamento enviado</p>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#8a4b00', margin: '0 0 8px' }}>
+                {etapaInicial === 'orcamento_enviado' ? 'Orçamento enviado' : 'Negociação/decisão'}
+              </p>
               <CamposOrcamento valores={orc} onChange={setOrc} erros={errosOrc} />
+              <Campo label="Temperatura" style={{ marginTop: 8, marginBottom: 0 }}>
+                <select value={temperatura} onChange={e => setTemperatura(e.target.value)} style={inputStyle}>
+                  <option value="frio">Frio</option>
+                  <option value="morno">Morno</option>
+                  <option value="quente">Quente</option>
+                </select>
+              </Campo>
             </div>
           )}
 
@@ -334,23 +339,6 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
                   </Campo>
                 )}
               </div>
-            </div>
-          )}
-
-          {emAndamento && etapaInicial === 'negociacao_decisao' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Campo label="Valor da cotação (R$) *" style={{ flex: 1 }}>
-                <input type="number" step="0.01" value={valorCotacao} onChange={e => setValorCotacao(e.target.value)} style={inputStyle} />
-              </Campo>
-              {etapaInicial === 'negociacao_decisao' && (
-                <Campo label="Temperatura" style={{ flex: 1 }}>
-                  <select value={temperatura} onChange={e => setTemperatura(e.target.value)} style={inputStyle}>
-                    <option value="frio">Frio</option>
-                    <option value="morno">Morno</option>
-                    <option value="quente">Quente</option>
-                  </select>
-                </Campo>
-              )}
             </div>
           )}
 
@@ -381,15 +369,15 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
               {ORIGENS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
           </Campo>
-          {!(etapaInicial === 'orcamento_enviado' || etapaInicial === 'ganha') && (
+          {etapaInicial === 'prospeccao' && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <Campo label={emAndamento && etapaInicial === 'negociacao_decisao' ? 'Próxima ação *' : 'Próxima ação'} style={{ flex: 1 }}>
+              <Campo label="Próxima ação" style={{ flex: 1 }}>
                 <select value={proximaAcao} onChange={e => setProximaAcao(e.target.value)} style={inputStyle}>
                   <option value="">-</option>
                   {PROXIMAS_ACOES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
               </Campo>
-              <Campo label={emAndamento && etapaInicial === 'negociacao_decisao' ? 'Data *' : 'Data'} style={{ flex: 1 }}>
+              <Campo label="Data" style={{ flex: 1 }}>
                 <input type="date" value={proximaAcaoData} onChange={e => setProximaAcaoData(e.target.value)} style={inputStyle} />
               </Campo>
             </div>

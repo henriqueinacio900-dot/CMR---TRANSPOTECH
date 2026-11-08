@@ -125,7 +125,7 @@ export default function Dashboard() {
       head: [['Indicador', 'Valor']],
       body: [
         ['Pipeline total', formatarMoeda(pipelineTotal)],
-        ['Pipeline ponderado', formatarMoeda(pipelinePonderado)],
+        ['Pipeline projetado', formatarMoeda(pipelinePonderado)],
         ['Ganho no mês', formatarMoeda(valorGanhoMes)],
         ['Perdido no mês', formatarMoeda(valorPerdidoMes)],
         [`Taxa de ganho (${faixaTaxa.rotulo})`, `${tg.taxa === null ? '—' : taxaConversao.toFixed(0) + '%'}`],
@@ -199,7 +199,7 @@ export default function Dashboard() {
       <Secao titulo="Visão geral">
         <div style={grid4}>
           <Card label="Pipeline total" valor={formatarMoeda(pipelineTotal)} />
-          <Card label="Pipeline ponderado" valor={formatarMoeda(pipelinePonderado)} />
+          <Card label="Pipeline projetado" valor={formatarMoeda(pipelinePonderado)} />
           <Card label="Ganho no mês" valor={formatarMoeda(valorGanhoMes)} cor="#3b6d11" />
           <Card label="Perdido no mês" valor={formatarMoeda(valorPerdidoMes)} cor="#a32d2d" />
         </div>

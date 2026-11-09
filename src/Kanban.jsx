@@ -8,6 +8,7 @@ import { listarDepartamentos, listarNegocios, listarConsultores, voltarParaProsp
 import { ETAPAS, CORES_TEMPERATURA, CORES_GANHA, CORES_PERDIDA, CORES_FATURAMENTO_PROXIMO, CORES_MARCA, formatarMoeda, classificarPci, classificarValorCliente } from './constants'
 import { TEMA, cardBase, cardElevadoBase } from './theme'
 import NovoNegocio from './NovoNegocio.jsx'
+import PropostaPm2p from './PropostaPm2p.jsx'
 import ProspeccaoCard from './ProspeccaoCard.jsx'
 import CardDetalhado from './CardDetalhado.jsx'
 import FilaLigar from './FilaLigar.jsx'
@@ -76,6 +77,9 @@ export default function Kanban() {
   const [vendedorSelecionado, setVendedorSelecionado] = useState('todos')
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
+  const [modalPm2pAberto, setModalPm2pAberto] = useState(false)
+  // Criar proposta PM2P: administrador, gestor e quem tem a visão completa do PM2P (ex.: Guilherme)
+  const podeCriarProposta = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor' || !!euMesmo?.pm2p_ve_tudo
   const [negocioSelecionado, setNegocioSelecionado] = useState(null)
   const [atividadeParaRelatorio, setAtividadeParaRelatorio] = useState(null)
   const [visao, setVisao] = useState('visao_geral')
@@ -218,6 +222,17 @@ export default function Kanban() {
             >
               + Nova oportunidade
             </button>
+            {podeCriarProposta && (
+              <button
+                onClick={() => setModalPm2pAberto(true)}
+                style={{
+                  background: 'transparent', color: TEMA.laranjaLuminoso, border: `1px solid ${TEMA.laranjaLuminoso}`,
+                  borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                📄 Criar proposta PM2P
+              </button>
+            )}
           </div>
         </div>
 
@@ -289,6 +304,16 @@ export default function Kanban() {
           euMesmo={euMesmo}
           onFechar={() => setModalAberto(false)}
           onCriado={() => { setModalAberto(false); carregar() }}
+        />
+      )}
+
+      {modalPm2pAberto && (
+        <NovoNegocio
+          modoPm2p
+          departamentos={departamentos}
+          euMesmo={euMesmo}
+          onFechar={() => setModalPm2pAberto(false)}
+          onCriado={() => { setModalPm2pAberto(false); carregar() }}
         />
       )}
 
@@ -1000,7 +1025,7 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
                   if (col.key === 'prospeccao') {
                     return <ProspeccaoCard key={n.id} negocio={n} onAtualizado={onAtualizado} onAbrirDetalhe={() => onAbrir(n.id)} />
                   }
-                  return <CardNegocio key={n.id} negocio={n} onClick={() => onAbrir(n.id)} />
+                  return <CardNegocio key={n.id} negocio={n} onClick={() => onAbrir(n.id)} onAtualizado={onAtualizado} />
                 })}
               </div>
             </div>
@@ -1021,7 +1046,9 @@ function QuadroKanban({ filtrados, onAbrir, onAtualizado, colunasVisiveis, perio
   )
 }
 
-function CardNegocio({ negocio, onClick }) {
+function CardNegocio({ negocio, onClick, onAtualizado }) {
+  const [propostaAberta, setPropostaAberta] = useState(false)
+  const mostrarProposta = !!negocio.eh_pm2p && ['contato_realizado', 'orcamento_enviado', 'negociacao_decisao'].includes(negocio.etapa)
   const temp = negocio.etapa === 'ganha'
     ? CORES_GANHA[negocio.status_faturamento === 'faturado' ? 'faturado' : 'previsto']
     : negocio.etapa === 'perdida'
@@ -1080,6 +1107,17 @@ function CardNegocio({ negocio, onClick }) {
       {negocio.numero_orcamento && (
         <p style={{ fontSize: 11, margin: '3px 0 0', color: temp ? temp.sub : '#999' }}>Orçamento: {negocio.numero_orcamento}</p>
       )}
+      {negocio.eh_pm2p && (
+        <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#FFF1E0', color: '#B85C00' }}>PM2P</span>
+          {mostrarProposta && (
+            <button onClick={() => setPropostaAberta(true)}
+              style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, border: 'none', background: '#F77E01', color: '#fff', cursor: 'pointer' }}>
+              📄 Proposta
+            </button>
+          )}
+        </div>
+      )}
       <p style={{ fontSize: 13, margin: '4px 0 0', fontWeight: 600, color: temp ? temp.titulo : '#222' }}>
         {formatarMoeda(negocio.etapa === 'ganha' ? (negocio.valor_final || negocio.valor_cotacao) : negocio.valor_cotacao)}
       </p>
@@ -1091,6 +1129,9 @@ function CardNegocio({ negocio, onClick }) {
           </p>
         )}
       </div>
+      {propostaAberta && (
+        <PropostaPm2p negocio={negocio} onFechar={() => setPropostaAberta(false)} onAtualizado={() => onAtualizado?.()} />
+      )}
     </div>
   )
 }

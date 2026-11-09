@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { registrarInteracao, gerarOrcamento, moverParaRetornoFuturo, descartarNegocio, moverEtapa, daquiADias } from './api'
+import { Phone } from 'lucide-react'
+import { registrarInteracao, gerarOrcamento, moverParaRetornoFuturo, descartarNegocio, moverEtapa, daquiADias, listarLigacoesNaoAtendidas } from './api'
+import ContatoPm2p from './ContatoPm2p.jsx'
+import PropostaPm2p from './PropostaPm2p.jsx'
 import { CORES_TEMPERATURA, formatarMoeda } from './constants'
 
 const TIPOS = [
@@ -17,6 +20,17 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
   const [temperatura, setTemperatura] = useState('morno')
   const [dataFutura, setDataFutura] = useState('')
   const [salvando, setSalvando] = useState(false)
+  // Oportunidade PM2P: contato por canal (modal), proposta e histórico de ligações não atendidas
+  const ehPm2p = !!negocio.eh_pm2p
+  const [contatoAberto, setContatoAberto] = useState(false)
+  const [propostaAberta, setPropostaAberta] = useState(false)
+  const [ligacoes, setLigacoes] = useState(null) // null = fechado
+  const tentativas = negocio.tentativas_ligacao || 0
+
+  async function alternarLigacoes() {
+    if (ligacoes) { setLigacoes(null); return }
+    setLigacoes(await listarLigacoesNaoAtendidas(negocio.id))
+  }
 
   async function confirmarContato(tipo) {
     setSalvando(true)
@@ -132,13 +146,35 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
       )}
       <p style={{ fontSize: 11, color: '#777', margin: '4px 0 0' }}>{negocio.consultor?.nome}</p>
       <p style={{ fontSize: 11, color: '#999', margin: '2px 0 0' }}>Criado em: {criadoEm}</p>
+      {ehPm2p && (
+        <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#FFF1E0', color: '#B85C00' }}>PM2P</span>
+          {tentativas > 0 && (
+            <button onClick={alternarLigacoes} title="Ligações não atendidas — clique para ver dias e horários"
+              style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#a32d2d', fontSize: 12, fontWeight: 700 }}>
+              <Phone size={13} /> {tentativas}
+            </button>
+          )}
+        </div>
+      )}
+      {ehPm2p && ligacoes && (
+        <div onClick={e => e.stopPropagation()} style={{ marginTop: 4, padding: '6px 8px', background: '#fcebeb', borderRadius: 6, fontSize: 11, color: '#7a2020' }}>
+          <p style={{ margin: '0 0 3px', fontWeight: 700 }}>Ligações não atendidas</p>
+          {ligacoes.length === 0 && <p style={{ margin: 0 }}>Sem registro de data.</p>}
+          {ligacoes.map(l => (
+            <p key={l.id} style={{ margin: '1px 0' }}>
+              {new Date(l.criado_em).toLocaleDateString('pt-BR')} às {new Date(l.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          ))}
+        </div>
+      )}
       <p style={{ fontSize: 11, color: ultimoContato ? '#999' : '#c0392b', margin: '2px 0 0' }}>
         {ultimoContato ? `Último contato: ${ultimoContato}` : 'Ainda sem contato'}
       </p>
 
       <div onClick={e => e.stopPropagation()}>
         {etapaLocal === 'inicial' && (
-          <button style={btnPrincipal} onClick={() => setEtapaLocal('escolher_tipo')}>
+          <button style={btnPrincipal} onClick={() => (ehPm2p ? setContatoAberto(true) : setEtapaLocal('escolher_tipo'))}>
             Registrar contato
           </button>
         )}
@@ -200,6 +236,14 @@ export default function ProspeccaoCard({ negocio, onAtualizado, onAbrirDetalhe }
           </div>
         )}
       </div>
+
+      {contatoAberto && (
+        <ContatoPm2p negocio={negocio} onFechar={() => setContatoAberto(false)} onAtualizado={onAtualizado}
+          onGerarProposta={() => setPropostaAberta(true)} />
+      )}
+      {propostaAberta && (
+        <PropostaPm2p negocio={negocio} onFechar={() => { setPropostaAberta(false); onAtualizado() }} onAtualizado={onAtualizado} />
+      )}
     </div>
   )
 }

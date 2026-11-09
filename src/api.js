@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import { SEQUENCIA_ORCAMENTO } from './constants'
 import { cadenciaDevePular } from './regrasEtapa'
+import { addMeses } from './pm2pCalc'
 
 export async function getMeuConsultor() {
   const { data: { user } } = await supabase.auth.getUser()
@@ -58,7 +59,7 @@ const SELECT_NEGOCIOS_BASE = `
 export async function listarNegocios() {
   let { data, error } = await supabase
     .from('negocios')
-    .select(`${SELECT_NEGOCIOS_BASE}, proxima_acao_origem, previsao_faturamento, unidade_id, equipamento_id`)
+    .select(`${SELECT_NEGOCIOS_BASE}, proxima_acao_origem, previsao_faturamento, unidade_id, equipamento_id, eh_pm2p, tentativas_ligacao`)
     .order('atualizado_em', { ascending: false })
 
   if (error && erroDeColunaInexistente(error)) {
@@ -195,11 +196,11 @@ export async function listarTransicoesEtapa() {
   return todas
 }
 
-export async function registrarInteracao({ negocio_id, tipo, resultado, observacao }) {
+export async function registrarInteracao({ negocio_id, tipo, resultado, observacao, atendeu }) {
   const consultor = await getMeuConsultor()
   const { data, error } = await supabase
     .from('interacoes')
-    .insert({ negocio_id, tipo, resultado, observacao, criado_por: consultor?.id })
+    .insert({ negocio_id, tipo, resultado, observacao, ...(atendeu !== undefined ? { atendeu } : {}), criado_por: consultor?.id })
     .select()
     .single()
   if (error) throw error
@@ -978,5 +979,101 @@ export async function listarContratosDoCliente(razaoSocial) {
     .select('id, cliente_nome, valor_mensalidade, modelo, data_vencimento, status')
     .ilike('cliente_nome', String(razaoSocial || '').trim())
   if (error) { console.error('Erro ao listar contratos do cliente:', error); return [] }
+  return data
+}
+
+
+// ---------- Proposta PM2P ----------
+// Ligação não atendida: grava a tentativa (data e hora) e soma no contador, numa operação só.
+export async function registrarLigacaoSemResposta(negocioId, observacao) {
+  const { data, error } = await supabase.rpc('registrar_ligacao_sem_resposta', {
+    p_negocio_id: negocioId, p_observacao: observacao || null,
+  })
+  if (error) throw error
+  return data
+}
+
+export async function listarLigacoesNaoAtendidas(negocioId) {
+  const { data, error } = await supabase
+    .from('interacoes')
+    .select('id, criado_em, observacao')
+    .eq('negocio_id', negocioId).eq('tipo', 'ligacao').eq('atendeu', false)
+    .order('criado_em', { ascending: false })
+  if (error) { console.error(error); return [] }
+  return data
+}
+
+// Agendar visita: aparece no calendário (próxima ação) e já leva o negócio para Contato realizado.
+export async function agendarVisitaEAvancar(negocioId, { dataISO, observacao }) {
+  await criarAtividade({
+    negocio_id: negocioId, tipo: 'visita', descricao: observacao || 'Visita agendada (PM2P)',
+    data_hora: dataISO, concluida: false,
+  })
+  return moverEtapa(negocioId, 'contato_realizado', {
+    proxima_acao: 'visita', proxima_acao_data: dataISO, proxima_acao_origem: 'manual',
+    ultima_interacao_em: new Date().toISOString(),
+  })
+}
+
+export async function buscarPropostaPm2p(negocioId) {
+  const { data, error } = await supabase.from('propostas_pm2p').select('*').eq('negocio_id', negocioId).maybeSingle()
+  if (error) { console.error(error); return null }
+  return data
+}
+
+// Uma proposta por negócio: gerar de novo atualiza a mesma linha.
+export async function salvarPropostaPm2p(negocioId, dados, resumo) {
+  const consultor = await getMeuConsultor()
+  const { data, error } = await supabase
+    .from('propostas_pm2p')
+    .upsert({
+      negocio_id: negocioId,
+      numero: dados.numero,
+      valor_mensal: resumo.valorMensal,
+      validade_meses: resumo.validadeMeses,
+      resultado_valor: resumo.resultadoValor,
+      dados,
+      criado_por: consultor?.id,
+      atualizado_em: new Date().toISOString(),
+    }, { onConflict: 'negocio_id' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Venda Ganha de uma proposta PM2P vira contrato na aba PM2P, com vencimento = início + validade.
+// negocio_id é único: marcar Ganha de novo atualiza o mesmo contrato, nunca duplica.
+export async function criarContratoDaProposta({ negocio, proposta, inicioISO }) {
+  const consultor = await getMeuConsultor()
+  const d = proposta.dados
+  const mensal = Number(proposta.valor_mensal) || 0
+  const rent = Number(proposta.resultado_valor) || 0
+  const meses = Number(proposta.validade_meses)
+  const linha = {
+    negocio_id: negocio.id,
+    cliente_nome: negocio.cliente?.razao_social || d.cliente,
+    modelo: `${d.maquinas} máquina${Number(d.maquinas) === 1 ? '' : 's'}`,
+    valor_mensalidade: mensal,
+    rentabilidade_valor: rent || null,
+    rentabilidade_percentual: mensal > 0 && rent ? Math.round((rent / mensal) * 1000) / 10 : null,
+    data_inicio: inicioISO,
+    duracao_meses: meses,
+    data_vencimento: addMeses(inicioISO, meses),
+    status: 'ativo',
+    observacoes: `Proposta ${proposta.numero || ''} — ${d.maquinas} máquina(s), ${d.diariasSemana} diária(s)/semana, ${d.tecnicos} técnico(s), ${meses} meses.`.replace(/\s+/g, ' '),
+    atualizado_em: new Date().toISOString(),
+  }
+  const { data, error } = await supabase
+    .from('contratos_manutencao')
+    .upsert({ ...linha, criado_por: consultor?.id }, { onConflict: 'negocio_id' })
+    .select()
+    .single()
+  if (error) throw error
+  await registrarHistorico({
+    negocio_id: negocio.id, tipo_evento: 'contrato_pm2p_criado',
+    descricao: `Contrato PM2P criado — vence em ${new Date(linha.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}`,
+    dados_novos: { contrato_id: data.id, data_inicio: inicioISO, data_vencimento: linha.data_vencimento },
+  })
   return data
 }

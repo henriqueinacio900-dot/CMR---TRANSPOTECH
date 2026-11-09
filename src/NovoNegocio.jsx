@@ -14,7 +14,8 @@ const ETAPAS_INICIAIS = [
   { key: 'ganha', label: 'Venda fechada (Ganha)' },
 ]
 
-export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado, clientePreenchido = null }) {
+// modoPm2p: "Criar proposta PM2P" — mesmo cadastro, mas o negócio nasce marcado como PM2P e sempre em Prospecção.
+export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado, clientePreenchido = null, modoPm2p = false }) {
   const ehAdmin = euMesmo?.perfil === 'administrador' || euMesmo?.perfil === 'gestor'
   // Cliente
   const [razaoSocial, setRazaoSocial] = useState(clientePreenchido?.razao_social || '')
@@ -125,7 +126,7 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
 
     const ehOrcamento = etapaInicial === 'orcamento_enviado'
     const ehNegociacao = etapaInicial === 'negociacao_decisao'
-    const ehGanha = etapaInicial === 'ganha'
+    const ehGanha = !modoPm2p && etapaInicial === 'ganha'
 
     // Mesma validação de "Orçamento enviado" da mudança de etapa: número, valor e próxima ação com data.
     if (ehOrcamento || ehNegociacao) {
@@ -171,8 +172,9 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
       await criarNegocio({
         cliente_id: clienteId,
         departamento_id: departamentoId,
-        etapa: etapaInicial,
+        etapa: modoPm2p ? 'prospeccao' : etapaInicial,
         titulo: razaoSocial,
+        ...(modoPm2p ? { eh_pm2p: true, produto_servico: 'PM2P' } : {}),
         origem: origem || null,
         valor_cotacao: comOrc ? Number(orc.valor_cotacao) : (valorCotacao ? Number(valorCotacao) : null),
         numero_orcamento: comOrc ? orc.numero_orcamento.trim() : null,
@@ -210,7 +212,7 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
         background: '#fff', borderRadius: 12, padding: 24, width: 440, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
       }}>
-        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>Nova oportunidade</h2>
+        <h2 style={{ fontSize: 16, margin: '0 0 16px' }}>{modoPm2p ? 'Nova proposta PM2P' : 'Nova oportunidade'}</h2>
 
         <Secao titulo="Dados do cliente">
           <Campo label="Nome do cliente">
@@ -298,11 +300,13 @@ export default function NovoNegocio({ departamentos, euMesmo, onFechar, onCriado
         </Secao>
 
         <Secao titulo="Contato principal">
-          <Campo label="Etapa da oportunidade">
-            <select value={etapaInicial} onChange={e => setEtapaInicial(e.target.value)} style={inputStyle}>
-              {ETAPAS_INICIAIS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
-            </select>
-          </Campo>
+          {!modoPm2p && (
+            <Campo label="Etapa da oportunidade">
+              <select value={etapaInicial} onChange={e => setEtapaInicial(e.target.value)} style={inputStyle}>
+                {ETAPAS_INICIAIS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
+              </select>
+            </Campo>
+          )}
 
           {(etapaInicial === 'orcamento_enviado' || etapaInicial === 'negociacao_decisao') && (
             <div style={{ marginBottom: 10, padding: 10, background: '#FFF8F0', border: '1px solid #F0C89A', borderRadius: 8 }}>

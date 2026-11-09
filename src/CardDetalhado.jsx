@@ -3,7 +3,9 @@ import {
   listarContatos, criarContato, listarAtividades, criarAtividade, listarHistorico,
   listarMotivosPerda, atualizarNegocio, moverEtapa, marcarPerdida, marcarGanha, registrarDescontoNoHistorico,
   recalcularProximoPassoOrcamento, excluirNegocio, moverParaOrcamento,
+  buscarPropostaPm2p, criarContratoDaProposta,
 } from './api'
+import PropostaPm2p from './PropostaPm2p.jsx'
 import {
   ETAPAS, SUBSTATUS_NEGOCIACAO, ORIGENS, URGENCIAS, PROXIMAS_ACOES,
   formatarMoeda, formatarData, formatarTelefoneInput, paraISOLocal, paraDatetimeLocalInput,
@@ -559,6 +561,8 @@ function AbaHistorico({ negocio }) {
 }
 
 function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
+  const [propostaAberta, setPropostaAberta] = useState(false)
+  const mostrarProposta = !!negocio.eh_pm2p && ['contato_realizado', 'orcamento_enviado', 'negociacao_decisao'].includes(negocio.etapa)
   const [novaEtapa, setNovaEtapa] = useState(negocio.etapa)
   const [mostrarPerdida, setMostrarPerdida] = useState(false)
   const [mostrarGanha, setMostrarGanha] = useState(false)
@@ -701,6 +705,11 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
     try {
       const desconto = Math.round((cotacao - valorFinal) * 100) / 100
       await marcarGanha(negocio.id, { valor_cotacao: cotacao, valor_final: valorFinal, desconto_valor: desconto, status_faturamento: statusFaturamento, previsao_faturamento: previsaoFaturamento })
+      // Proposta PM2P ganha pelo card: cria o contrato na aba PM2P (início hoje; o valor mensal é o fechado)
+      if (negocio.eh_pm2p) {
+        const prop = await buscarPropostaPm2p(negocio.id)
+        if (prop) await criarContratoDaProposta({ negocio, proposta: { ...prop, valor_mensal: valorFinal }, inicioISO: hojeISO() })
+      }
       onAtualizado()
       onFechar()
     } finally {
@@ -710,6 +719,15 @@ function RodapeEtapa({ negocio, onAtualizado, onFechar }) {
 
   return (
     <div style={{ borderTop: '1px solid #eee', padding: '12px 20px' }}>
+      {mostrarProposta && (
+        <button onClick={() => setPropostaAberta(true)}
+          style={{ width: '100%', marginBottom: 10, padding: 10, border: 'none', borderRadius: 6, background: '#F77E01', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          📄 Proposta PM2P
+        </button>
+      )}
+      {propostaAberta && (
+        <PropostaPm2p negocio={negocio} onFechar={() => setPropostaAberta(false)} onAtualizado={onAtualizado} />
+      )}
       {!mostrarPerdida && !mostrarGanha && !mostrarExigirAcao && !mostrarOrcamento && (
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={novaEtapa} onChange={e => setNovaEtapa(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
